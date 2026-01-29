@@ -1,0 +1,513 @@
+This is a initial design document for the DoubleZero project.
+
+# AI Instructions: 
+Please re-read the design_notes.txt design document for this project 
+as the document and tools have changed. 
+
+
+# Purpose
+
+DoubleZero is an app for tracking and managing soccer teams, players, personnel,
+games, and more. It features authenticated CRUD screens (with soft deletes) for
+all domains and a RESTful API for integration with the frontend, the mobile client,
+and potentially other apps/services at some point.
+
+
+# Overview
+
+The DoubleZero project is a web and mobile application that is built with the
+following technologies:
+ * Node.js (for the server)
+ * Express Server (for the server)
+ * Typescript (for the coding language)
+ * Svelte Kit for the frontend
+ * Tailwind CSS (for styling)
+ * ZOD for validation
+ * Mobile: Either Svelte Native or Capacitor (TBD)
+ * MariaDB (for the database)
+
+
+# Code Architecture/Layout
+
+/src/backend/ - for the Express backend, API, service layer, model layer, etc.
+/src/frontend/ - for the Svelte frontend, components, etc.
+/src/mobile/ - for the mobile app, components, etc.
+/src/shared/ - any shared components or utilities.
+
+
+# Features
+
+Backend API that is authenticated and supports the following:
+- Use Express.Router for clean route separation.
+- a Static router to serve files from the public directory.
+- Default router for authentication. Displays login page or redirects
+ to user's dashboard. Login page includes registration.
+- Role-Authenticated CRUD operations for all domains
+
+For managing player positions in general and for specific games frontend uses a soccer
+field motif/image to display the field and the players on the field. The coach can drag
+and drop the players to the field to indicate their positions. In a side panel is a list
+of remaining players that can be added to the remaining positions. This helps the coach
+plan the game. Once saved, a roster can be generated for the game for printing, email, etc.
+
+On login, the user is redirected to a dashboard that shows several cards, based on
+the user's role:
+- a calendar of games
+- current season stats
+- current team stats
+- current player stats (if PLAYER)
+- player roster (if PLAYER, HEAD_COACH, COACH, MANAGER)
+
+# Security
+
+The application is authenticated (possibly using the Better-Auth library?) with local
+accounts in the database and local authentication to start. It eventually must support
+other authentication methods, such as Google, Facebook, etc., so this needs to be
+flexible enough to support that from the start.
+
+
+Core User & Roles Tables
+
+Table User (PLUS any needed authentication fields):
+- id
+- email
+- cell
+- first_name
+- last_name
+- created_at
+- updated_at
+- isActive
+- isDeleted
+- created_by
+- updated_by
+
+Table Role:  -- (PLUS any needed authentication fields.) Used for both global and scoped roles
+- id
+- name  -- ADMIN, REFEREE, LINE_JUDGE, HEAD_COACH, COACH, MANAGER, PLAYER, FAN, etc.
+
+Table UserRole:  -- (PLUS any needed authentication fields.) Can scope roles to league/team/game
+- id
+- user_id
+- role_id
+- scope_type  -- 'GLOBAL', 'LEAGUE', 'TEAM', 'GAME'
+- scope_id  -- FK to corresponding scope table
+- created_at
+- updated_at
+
+League, Season, Team Structure
+
+Table League:
+- id
+- name
+- description
+- governing_body
+- created_at
+- updated_at
+- isActive
+- isDeleted
+
+Table Season:
+- id
+- league_id
+- name
+- season_start_date
+- season_end_date
+- created_at
+- updated_at
+
+Table Team:
+- id
+- league_id  -- nullable, if teams play multi-league
+- name
+- created_at
+- updated_at
+- isActive
+- isDeleted
+
+Table TeamRoster:  -- Defines team members per season
+- id
+- team_id
+- season_id
+- user_id
+- role_id      -- e.g. PLAYER, HEAD_COACH
+- position_id  -- FK to PlayerPosition
+- jersey_number
+- join_date
+- leave_date
+- created_at
+- updated_at
+
+Table PlayerPosition:
+- id
+- name  -- DEFENDER, MIDFIELDER, etc.
+
+Game, Game Types, Status, Locations
+
+Table GameType:
+- id
+- name
+- description
+
+Table GameStatus:
+- id
+- name  -- SCHEDULED, COMPLETED, etc.
+
+Table Location:
+- id
+- name
+- address
+- city
+- state
+- zip
+- country
+- home_team_id   -- optional
+- created_at
+- updated_at
+
+Table Game:
+- id
+- date
+- starting_time
+- ending_time
+- location_id
+- season_id
+- team1_id
+- team2_id
+- referee_id         -- can be NULL, or FK to User
+- team1_score
+- team2_score
+- game_type_id
+- status_id
+- attendance_count
+- weather_conditions
+- created_at
+- updated_at
+
+Game Participants and Stats
+
+Table GameUser:  -- Who participated and how
+- id
+- game_id
+- team_id
+- user_id
+- role_id
+- position_id  -- not null if role = PLAYER
+- created_at
+- updated_at
+
+Table PlayerStats:
+- id
+- game_id
+- team_id
+- player_id
+- minutes_played
+- goals
+- assists
+- shots
+- saves
+- yellow_cards
+- red_cards
+- penalties_scored
+- penalties_missed
+- created_at
+
+Game Events and Event Types
+
+Table GameEventType:
+- id
+- name        -- e.g. GOAL, YELLOW_CARD, SUBSTITUTION
+- description -- can be NULL
+- isDeleted   -- soft delete (hide from UI)
+
+Table GameEvent:  -- Event instance occurring in a game
+- id
+- game_id
+- event_type_id
+- occurred_at      -- absolute UTC timestamp
+- match_minute     -- minute in game clock
+- team_id          -- optional, FK
+- player_id        -- optional, FK
+- triggered_by_user_id  -- e.g. referee
+- notes            -- optional
+- created_at
+
+Standings & Leaderboards
+
+Table Standings:
+- id
+- season_id
+- team_id
+- wins
+- draws
+- losses
+- goals_for
+- goals_against
+- points
+- created_at
+- updated_at
+
+Other Suggested Expansion Tables (optional for MVP)
+
+Table TrainingSession:
+- id
+- team_id
+- season_id
+- date
+- location_id
+- created_by
+- created_at
+
+Table MediaUpload:
+- id
+- game_id
+- user_id
+- url
+- description
+- created_at
+
+Table Injury:
+- id
+- player_id
+- game_id       -- if applies
+- description
+- estimated_return_date
+- created_at
+- updated_at
+
+Relationships (Visual Notes)
+User --< UserRole >-- Role (role scoping via scope_type/scope_id)
+
+League --< Season --< TeamRoster >-- Team --< Game (team1_id, team2_id) >-- GameUser
+
+Game --< GameEvent >-- GameEventType
+
+Game --< PlayerStats
+
+Location --< Game
+
+Team --< Standings (per season)
+
+Game --< MediaUpload
+
+TeamRoster is historical—users keep previous seasons/teams/roles
+
+Practical Usage Notes
+Soft deletes (isDeleted) and activity flags (isActive) help with audit history.
+
+Role scoping via scope_type makes permissions adaptable.
+
+Team rosters are seasonal; historical data is preserved on transfers.
+
+Game events record time, actors, affected users, and details—enabling advanced match logs and analytics.
+
+Stats tables allow for rapid querying of leaderboards and player stats.
+
+The structure supports features like scheduling, announcements, and notifications.
+
+------------------------
+
+Here’s a versioned RESTful API concept for the DoubleZero soccer app, compatible with your enhanced, normalized database schema.
+It covers full CRUD (using soft deletes), pagination, role-based access, and extensibility for future features. This design
+balances maintainability with ease of use—for both web/mobile clients and integrations.
+
+API Versioning
+All routes start with /api/v1/* (or /v1/*), making upgrades non-breaking:
+
+
+GET /api/v1/users
+POST /api/v1/games
+...
+Common Patterns for All Endpoints
+Pagination:
+
+All GET list endpoints accept ?page=, ?limit=, optionally ?sortBy=, ?order=.
+
+Responses include: totalCount, page, limit, and results array.
+
+Soft Deletes:
+
+Instead of hard DELETE, all records have isDeleted (and often isActive).
+
+DELETE sets isDeleted=true; GET endpoints exclude deleted by default, but may include with a query (?includeDeleted=true).
+
+Audit Fields:
+
+created_by, updated_by are set by auth context.
+
+Authentication & Permissions
+JWT or session-based.
+
+Roles provided per UserRole table; scoped permissions (global/league/team/game).
+
+Some endpoints (e.g., admin updates) restricted by role.
+
+Main API Resources and Endpoints
+Below is a sketch of endpoint groups, example payloads, and CRUD patterns.
+
+1. Users
+
+GET    /api/v1/users           # List users (paginated)
+GET    /api/v1/users/:id       # Get user by ID
+POST   /api/v1/users           # Create user
+PATCH  /api/v1/users/:id       # Update user
+DELETE /api/v1/users/:id       # Soft-delete user
+Payloads accept standard fields + set isDeleted:true.
+
+UserRoles
+
+GET    /api/v1/user_roles           # List
+POST   /api/v1/user_roles           # Assign role (scope_type/scope_id)
+DELETE /api/v1/user_roles/:id       # Remove role assignment
+
+2. Teams & Rosters
+text
+GET    /api/v1/teams
+GET    /api/v1/teams/:id
+POST   /api/v1/teams
+PATCH  /api/v1/teams/:id
+DELETE /api/v1/teams/:id
+GET /teams/:id/roster — Get team roster for current or specified season.
+
+TeamRoster
+
+GET    /api/v1/team_rosters?team_id=&season_id=
+POST   /api/v1/team_rosters
+PATCH  /api/v1/team_rosters/:id
+DELETE /api/v1/team_rosters/:id
+
+3. Leagues & Seasons
+
+GET    /api/v1/leagues
+GET    /api/v1/leagues/:id
+POST   /api/v1/leagues
+PATCH  /api/v1/leagues/:id
+DELETE /api/v1/leagues/:id
+
+GET    /api/v1/seasons?league_id=
+GET    /api/v1/seasons/:id
+POST   /api/v1/seasons
+PATCH  /api/v1/seasons/:id
+DELETE /api/v1/seasons/:id
+
+4. Games
+
+GET    /api/v1/games
+GET    /api/v1/games/:id
+POST   /api/v1/games
+PATCH  /api/v1/games/:id
+DELETE /api/v1/games/:id
+Search and paginating:
+GET /games?season_id=&team_id=&date_gte=&date_lte=&status_id=&page=&limit=
+
+GameUser (participants)
+
+GET    /api/v1/game_users?game_id=
+POST   /api/v1/game_users
+PATCH  /api/v1/game_users/:id
+DELETE /api/v1/game_users/:id
+
+5. Game Events and Types
+
+GET    /api/v1/game_event_types
+GET    /api/v1/game_events?game_id=
+POST   /api/v1/game_events        # Create new game event (cannot delete/update, except soft-delete if needed for compliance)
+Events are append-only; isDeleted on event types only.
+
+6. Locations
+
+GET    /api/v1/locations
+POST   /api/v1/locations
+PATCH  /api/v1/locations/:id
+DELETE /api/v1/locations/:id
+
+7. Player Positions
+
+GET    /api/v1/player_positions
+POST   /api/v1/player_positions
+PATCH  /api/v1/player_positions/:id
+DELETE /api/v1/player_positions/:id
+
+8. Standings
+
+GET    /api/v1/standings?season_id=
+POST   /api/v1/standings
+PATCH  /api/v1/standings/:id
+DELETE /api/v1/standings/:id
+(POST/PATCH may be admin-only)
+
+9. Media, Training, Injuries (MVP optional)
+
+GET    /api/v1/media_uploads?game_id=
+POST   /api/v1/media_uploads
+DELETE /api/v1/media_uploads/:id
+
+GET    /api/v1/training_sessions?team_id=&season_id=
+POST   /api/v1/training_sessions
+DELETE /api/v1/training_sessions/:id
+
+GET    /api/v1/injuries?player_id=
+POST   /api/v1/injuries
+PATCH  /api/v1/injuries/:id
+DELETE /api/v1/injuries/:id
+
+Example Paginated List Response
+json
+{
+  "page": 1,
+  "limit": 25,
+  "totalCount": 167,
+  "results": [
+    {
+      "id": 3421,
+      "name": "Central FC",
+      "league_id": 23,
+      "isActive": true,
+      "isDeleted": false,
+      "created_at": "2025-07-30T12:05:45Z"
+    }
+    // more items…
+  ]
+}
+
+Soft Deletes Implementation
+All DELETE endpoints set isDeleted: true (and isActive: false if applicable).
+
+Update timestamps and audit (updated_by) on soft-delete.
+
+All normal GET endpoints exclude deleted records unless an admin uses ?includeDeleted=true.
+
+CRUD and Edit Patterns
+POST creates (returns resource with ID and timestamps).
+
+PATCH for partial updates (including reactivation: isActive: true).
+
+No PUT, unless you want full replacements.
+
+Bulk endpoints:
+Where appropriate, batch POST, PATCH, or DELETE can be implemented for management (e.g., roster updates).
+
+Error and Status Codes
+200 OK on successful GET
+
+201 Created on success POST
+
+204 No Content for successful DELETE (soft)
+
+400 Bad Request for invalid data/payloads
+
+403 Forbidden for unauthorized access/role violation
+
+404 Not Found for invalid resource ID
+
+Validation errors include field detail in JSON
+
+Notes for Implementation
+Endpoints grouped by entity; versioned for upgrade safety.
+
+Soft deletes used everywhere, preserving data for compliance and audit.
+
+Granular, scope-based role permissions using roles assigned in context.
+
+Pagination standard for all listings.
+
+Future extensions: Push notifications, game conflict checks, external stats feeds, etc., can add endpoint groups as stable for v1 and as /v2 as needed.

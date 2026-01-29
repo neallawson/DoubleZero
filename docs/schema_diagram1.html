@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DoubleZero Schema Diagram (v2)</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    body { 
+      font-family: system-ui, sans-serif; 
+      padding: 20px; 
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 { color: #fff; }
+    h2 { color: #4ecdc4; margin-top: 30px; }
+    .mermaid { 
+      background: #fff; 
+      padding: 20px; 
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .changes {
+      background: #2d2d44;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    .changes h2 { color: #4ecdc4; margin-top: 0; }
+    .changes ul { line-height: 1.8; }
+    code { background: #3d3d5c; padding: 2px 6px; border-radius: 4px; }
+    .removed { color: #ff6b6b; }
+    .added { color: #4ecdc4; }
+    .modified { color: #ffd93d; }
+  </style>
+</head>
+<body>
+  <h1>DoubleZero Database Schema (v2 - Season-Aware)</h1>
+  
+  <div class="mermaid">
+erDiagram
+    %% Authentication (Better-Auth managed)
+    user {
+        int id PK
+        string email "UK"
+        string name
+        bool emailVerified
+        timestamp createdAt
+    }
+    
+    user_role {
+        int id PK
+        int userId FK
+        string appRole
+    }
+    
+    session {
+        string id PK
+        int userId FK
+        string token
+        timestamp expiresAt
+    }
+    
+    user_session_state {
+        int id PK
+        string sessionId FK "unique"
+        int activeTeamId FK
+        timestamp createdAt
+    }
+    
+    account {
+        string id PK
+        int userId FK
+        string providerId
+        string accountId
+    }
+
+    %% Core Identity
+    person {
+        int id PK
+        int userId FK
+        string displayName
+        string firstName
+        string lastName
+        string email
+        string phone
+        date dateOfBirth
+        bool isActive
+        int version
+    }
+
+    %% League & Season (with active season tracking)
+    league {
+        int id PK
+        string name "UK"
+        text description
+        string governingBody
+        int activeSeasonId FK
+        bool isActive
+        int version
+    }
+    
+    season {
+        int id PK
+        int leagueId FK
+        string name
+        date startDate
+        date endDate
+        bool isActive
+        int version
+    }
+
+    %% Team (persists across seasons)
+    team {
+        int id PK
+        int leagueId FK
+        int activeSeasonId FK
+        string name
+        string shortName
+        string primaryColor
+        string secondaryColor
+        bool isActive
+        int version
+    }
+
+    %% Locker Room (season-specific workspace)
+    locker_room {
+        int id PK
+        int teamId FK
+        int seasonId FK
+        string name
+        text description
+        bool isPublic
+        int version
+    }
+
+    %% Team Membership (season-specific)
+    team_member {
+        int id PK
+        int teamId FK
+        int personId FK
+        int seasonId FK
+        string permission
+        int teamRoleId FK
+        int positionId FK
+        int jerseyNumber
+        string title
+        bool isActive
+        int version
+    }
+    
+    team_role {
+        int id PK
+        string name "UK"
+        text description
+        bool isActive
+    }
+    
+    player_position {
+        int id PK
+        string name "UK"
+        string shortName
+        bool isActive
+    }
+
+    %% Location (physical places)
+    location {
+        int id PK
+        string name
+        string address
+        string city
+        string state
+        string zip
+        string country
+        int homeTeamId FK
+        bool isActive
+        int version
+    }
+
+    %% Games
+    game {
+        int id PK
+        int seasonId FK
+        int locationId FK
+        int gameTypeId FK
+        int statusId FK
+        date date
+        string startTime
+        string endTime
+        int homeTeamId FK
+        int awayTeamId FK
+        int homeScore
+        int awayScore
+        int attendance
+        string weather
+        text notes
+        int version
+    }
+    
+    game_type {
+        int id PK
+        string name "UK"
+        bool isActive
+    }
+    
+    game_status {
+        int id PK
+        string name "UK"
+        bool isActive
+    }
+
+    %% Game Officials
+    game_official {
+        int id PK
+        int gameId FK
+        int personId FK
+        string role
+        int version
+    }
+    
+    %% Game Participants (via team_member)
+    game_participant {
+        int id PK
+        int gameId FK
+        int teamMemberId FK
+        int positionId FK
+        int jerseyNumber
+        bool isStarter
+        bool isCaptain
+        int minutesPlayed
+        int version
+    }
+    
+    game_event_type {
+        int id PK
+        string name "UK"
+        bool isActive
+    }
+    
+    %% Game Events (via game_participant)
+    game_event {
+        int id PK
+        int gameParticipantId FK
+        int eventTypeId FK
+        int matchMinute
+        int matchSecond
+        real fieldX
+        real fieldY
+        text notes
+        int relatedParticipantId FK
+    }
+
+    %% App Configuration
+    app_config {
+        int id PK
+        string key "UK"
+        text value
+        text description
+        bool isActive
+        int version
+    }
+
+    %% Audit
+    audit_log {
+        int id PK
+        string tableName
+        int recordId
+        string operation
+        int userId FK
+        timestamp changedAt
+        json oldValues
+        json newValues
+    }
+
+    %% === RELATIONSHIPS ===
+    
+    %% Auth
+    user ||--o{ user_role : has
+    user ||--o{ session : has
+    user ||--o{ account : has
+    user ||--o| person : linked
+    session ||--o| user_session_state : state
+    user_session_state }o--o| team : activeTeam
+    
+    %% League/Season structure
+    league ||--o{ season : has
+    league ||--o| season : activeSeason
+    league ||--o{ team : has
+    
+    %% Team structure (team persists, locker room is per-season)
+    team ||--o{ locker_room : hasPerSeason
+    team ||--o| season : activeSeason
+    locker_room }o--|| season : forSeason
+    
+    %% Team membership (season-specific)
+    team_member }o--|| team : team
+    team_member }o--|| person : person
+    team_member }o--|| season : season
+    team_member }o--o| team_role : role
+    team_member }o--o| player_position : position
+    
+    %% Location
+    location }o--o| team : homeTeam
+    
+    %% Games
+    game }o--|| season : inSeason
+    game }o--o| location : playedAt
+    game }o--|| game_type : type
+    game }o--|| game_status : status
+    game }o--|| team : homeTeam
+    game }o--|| team : awayTeam
+    
+    %% Game officials
+    game ||--o{ game_official : officials
+    game_official }o--|| person : person
+    
+    %% Game participants (via team_member)
+    game ||--o{ game_participant : participants
+    game_participant }o--|| team_member : member
+    game_participant }o--o| player_position : position
+    
+    %% Game events (via game_participant)
+    game_participant ||--o{ game_event : events
+    game_event }o--|| game_event_type : type
+    game_event }o--o| game_participant : relatedTo
+  </div>
+
+  <div class="changes">
+    <h2>Schema Changes Summary (v2)</h2>
+    
+    <h3 class="added">✅ New in v2</h3>
+    <ul>
+      <li><code>league.active_season_id</code> - League's official current season (set by league admin)</li>
+      <li><code>team.active_season_id</code> - Team's working season (can lag behind league for data entry)</li>
+      <li><code>locker_room.team_id</code> + <code>locker_room.season_id</code> - Locker rooms are now per-team-per-season</li>
+      <li><code>game_participant.is_captain</code> - Captains are game-specific (moved from team_member)</li>
+      <li><code>app_config</code> table - Key/value store for system-wide settings</li>
+      <li><code>user_session_state</code> table - Per-session state including <code>activeTeamId</code> (cascade deletes with session)</li>
+    </ul>
+    
+    <h3 class="removed">❌ Removed in v2</h3>
+    <ul>
+      <li><code>team.locker_room_id</code> - FK inverted; locker_room now points to team</li>
+      <li><code>team_member.is_captain</code> - Moved to game_participant (captains are per-game)</li>
+    </ul>
+    
+    <h3 class="modified">🔄 Key Design Decisions</h3>
+    <ul>
+      <li><strong>Two-level active season</strong>:
+        <ul>
+          <li><code>league.active_season_id</code> = official current season</li>
+          <li><code>team.active_season_id</code> = team's working season</li>
+          <li>If they differ, show warning banner to team users</li>
+        </ul>
+      </li>
+      <li><strong>Season-specific locker rooms</strong>:
+        <ul>
+          <li>Each team gets a new locker room each season</li>
+          <li>Old locker rooms become read-only archives</li>
+          <li>"Start New Season" button creates new locker room + updates team.active_season_id</li>
+        </ul>
+      </li>
+      <li><strong>Team persists across seasons</strong> - Team identity is permanent; membership and locker rooms are season-specific</li>
+      <li><strong>Captains are game-specific</strong> - The armband can change game-to-game</li>
+      <li><strong>Game participants via team_member</strong> - Enforces that only team members can participate</li>
+      <li><strong>Game events via game_participant</strong> - Enforces that only participants can have events</li>
+      <li><strong>Officials are separate</strong> - Referees use <code>game_official</code> table, not game_participant</li>
+    </ul>
+    
+    <h3>📋 Season Transition Flow</h3>
+    <ol>
+      <li>League admin creates new season</li>
+      <li>League admin sets <code>league.active_season_id</code> = new season</li>
+      <li>Teams with old <code>active_season_id</code> see warning banner</li>
+      <li>Team admin clicks "Start New Season" when ready</li>
+      <li>System creates new locker room for team + season</li>
+      <li>System updates <code>team.active_season_id</code></li>
+      <li>Team admin configures new season's roster (team_member records)</li>
+    </ol>
+  </div>
+
+  <script>
+    mermaid.initialize({ 
+      startOnLoad: true,
+      theme: 'default',
+      er: {
+        layoutDirection: 'TB',
+        minEntityWidth: 100,
+        minEntityHeight: 75,
+        entityPadding: 15
+      }
+    });
+  </script>
+</body>
+</html>

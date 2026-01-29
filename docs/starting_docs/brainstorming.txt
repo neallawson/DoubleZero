@@ -1,0 +1,71 @@
+
+
+
+I will go ahead and test. Let's deal with the role gating for the app in one, fell swoop:
+Please generate a text file for me in /docs/ that is a matrix with Create | Read | Update
+| Delete(soft)  as columns, and each table/domain entity as rows. I will create a legend
+that assigns single letters to either a single role or a group of roles, and I will put
+those letters in each cell of the matrix to indicate which roles can do this particular
+operation for this domain. Could you then read that matrix after I fill it out, and handle
+basic gating that way? 
+
+
+08/12/2025
+
+Game Events should capture the following:
+- person_id (drop down of persons from game roster.)
+- position_id (drop down of positions)
+- game_id (built in)
+- event_type_id (drop down)
+- minute (3x3 entry pad for 0-9 to enter minute.)
+- field_location (selected by clicking on the field image.)
+
+event type should include goals, fouls, yellow cards, red cards, substitutions,
+penalty kicks, corner kicks, injuries, timeouts, timeins, water break, etc.
+
+
+New table:
+team_sandbox {
+  id PKEY
+  team_id FK team.team_id The team admin role may assign user_ids to persons in this team,
+     thus "linking" a user with a logged-in account to a person in a team.
+  name (typically the organization and team name, "Scholar's Guild Spartans Soccer",
+   for example.)
+  description
+  owner_id FK user.user_id
+  created_at
+  updated_at
+}
+
+All the other tables (team, game, persons) have a sandbox_id FK to sandbox.id.
+This is what carves out the sandbox space for a team or coach to work in without
+interfering with other teams or coaches who may want to use the same system.
+
+The sandbox can be thought of by the user as "their private space" in the app.
+If they want to share things like roster, statistics, schedule, etc. to the
+public, then they can choose to make aspects public. Otherwise, it stays private
+to the users granted access to this space (sandbox) by the owner of the sandbox.
+
+This structure exists because a coach that wants to manage his or her team in
+this app cannot assume all of the players will sign up and get an account in this
+app. Even more so for other players on other teams. The coach must have the ability
+to create these entities regardless of user accounts so that he can manage his
+players, team, roster, schedule, etc. without assuming the players will sign up
+and get an account in this app. There is nothing that would prevent a league from
+using this app and having each team create their own sandbox consisting of just
+their own team, players, etc. and then being compelled to share certain aspects
+of the sandbox (public) or within a league (league) or within a season (season)
+to other teams in the league or season.
+(Ultimately, the app will probably need league, season, region, tournament, etc.
+scopes)
+
+More ideas:
+
+-- Add "photo" field to person table.
+-- Add "photo" field to team table.
+-- Add "notes" table for creating notes that can be attached to many entities.
+-- "Team Gallery", "Game Gallery", "Person Gallery", etc.
+-- Add images table.
+-- Add videos table.
+-- Add ability to add images and videos to games and on calendar.
+-- Add internal chat for person-to-person and person-to-team.

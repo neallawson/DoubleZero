@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DoubleZero Schema Diagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    body { 
+      font-family: system-ui, sans-serif; 
+      padding: 20px; 
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 { color: #fff; }
+    .mermaid { 
+      background: #fff; 
+      padding: 20px; 
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .issues {
+      background: #2d2d44;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    .issues h2 { color: #ff6b6b; }
+    .issues ul { line-height: 1.8; }
+    code { background: #3d3d5c; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>DoubleZero Database Schema</h1>
+  
+  <div class="mermaid">
+erDiagram
+    %% Authentication & Users
+    user {
+        int id PK
+        string email UK
+        string name
+        bool emailVerified
+        timestamp createdAt
+    }
+    
+    user_role {
+        int id PK
+        int userId FK
+        enum appRole
+    }
+    
+    session {
+        string id PK
+        int userId FK
+        string token
+        timestamp expiresAt
+    }
+    
+    account {
+        string id PK
+        int userId FK
+        string providerId
+        string accountId
+    }
+
+    %% Core Domain
+    locker_room {
+        int id PK
+        string name
+        text description
+        bool isPublic
+        int version
+    }
+    
+    team {
+        int id PK
+        int lockerRoomId FK
+        int leagueId FK
+        string name
+        string shortName
+        string primaryColor
+        string secondaryColor
+        bool isActive
+        int version
+    }
+    
+    person {
+        int id PK
+        int userId FK
+        string displayName
+        string firstName
+        string lastName
+        string email
+        string phone
+        date dateOfBirth
+        bool isActive
+        int version
+    }
+
+    %% Team Membership
+    team_member {
+        int id PK
+        int teamId FK
+        int personId FK
+        enum permission
+        int teamRoleId FK
+        string title
+        bool isActive
+        int version
+    }
+    
+    team_role {
+        int id PK
+        string name UK
+        text description
+        bool isActive
+    }
+    
+    season_roster {
+        int id PK
+        int teamId FK
+        int seasonId FK
+        int personId FK
+        int teamRoleId FK
+        int positionId FK
+        int jerseyNumber
+        bool isCaptain
+        bool isActive
+        int version
+    }
+    
+    player_position {
+        int id PK
+        string name UK
+        string shortName
+        bool isActive
+    }
+
+    %% League & Season
+    league {
+        int id PK
+        string name UK
+        text description
+        string governingBody
+        bool isActive
+        int version
+    }
+    
+    season {
+        int id PK
+        int leagueId FK
+        string name
+        date startDate
+        date endDate
+        bool isActive
+        int version
+    }
+
+    %% Location - HAS PROBLEM
+    location {
+        int id PK
+        int lockerRoomId FK
+        string name
+        string address
+        string city
+        int homeTeamId FK
+        bool isActive
+        int version
+    }
+
+    %% Games
+    game {
+        int id PK
+        int seasonId FK
+        int locationId FK
+        int gameTypeId FK
+        int statusId FK
+        date date
+        int homeTeamId FK
+        int awayTeamId FK
+        int homeScore
+        int awayScore
+        int version
+    }
+    
+    game_type {
+        int id PK
+        string name UK
+        bool isActive
+    }
+    
+    game_status {
+        int id PK
+        string name UK
+        bool isActive
+    }
+    
+    game_role {
+        int id PK
+        enum name
+        bool isActive
+    }
+    
+    game_participant {
+        int id PK
+        int gameId FK
+        int teamId FK
+        int personId FK
+        int gameRoleId FK
+        int positionId FK
+        bool isStarter
+        int minutesPlayed
+        int version
+    }
+    
+    game_event_type {
+        int id PK
+        string name UK
+        bool isActive
+    }
+    
+    game_event {
+        int id PK
+        int gameId FK
+        int teamId FK
+        int personId FK
+        int eventTypeId FK
+        int matchMinute
+        text notes
+    }
+
+    %% Relationships
+    user ||--o{ user_role : has
+    user ||--o{ session : has
+    user ||--o{ account : has
+    user ||--o| person : linked
+    
+    locker_room ||--|| team : owns
+    team }o--|| league : belongs
+    
+    person ||--o{ team_member : memberships
+    team ||--o{ team_member : members
+    team_member }o--o| team_role : role
+    
+    team ||--o{ season_roster : historical
+    season ||--o{ season_roster : roster
+    person ||--o{ season_roster : played
+    season_roster }o--o| team_role : role
+    season_roster }o--o| player_position : position
+    
+    league ||--o{ season : has
+    
+    location }o--o| locker_room : PROBLEM
+    location }o--o| team : homeTeam
+    
+    game }o--|| season : inSeason
+    game }o--o| location : playedAt
+    game }o--|| game_type : type
+    game }o--|| game_status : status
+    game }o--|| team : homeTeam
+    game }o--|| team : awayTeam
+    
+    game ||--o{ game_participant : has
+    game_participant }o--|| team : forTeam
+    game_participant }o--|| person : person
+    game_participant }o--|| game_role : role
+    game_participant }o--o| player_position : position
+    
+    game ||--o{ game_event : has
+    game_event }o--o| team : team
+    game_event }o--o| person : person
+    game_event }o--|| game_event_type : type
+  </div>
+
+  <div class="issues">
+    <h2>⚠️ Issues Identified</h2>
+    <ul>
+      <li><strong><code>location.locker_room_id</code> - WRONG</strong><br>
+        Locations are physical places (fields, stadiums). They should NOT reference locker_room (a virtual team workspace).<br>
+        <strong>Fix:</strong> Remove <code>locker_room_id</code> from location table.
+      </li>
+    </ul>
+    
+    <h2>✅ Correct Relationships</h2>
+    <ul>
+      <li><code>team</code> → <code>locker_room</code> (1:1) - Team owns the FK</li>
+      <li><code>team_member</code> - Join table for team permissions (ADMIN, MEMBER, VIEWER)</li>
+      <li><code>season_roster</code> - Historical roster data per season</li>
+      <li><code>person</code> no longer has <code>locker_room_id</code></li>
+    </ul>
+  </div>
+
+  <script>
+    mermaid.initialize({ 
+      startOnLoad: true,
+      theme: 'default',
+      er: {
+        layoutDirection: 'TB',
+        minEntityWidth: 100,
+        minEntityHeight: 75,
+        entityPadding: 15
+      }
+    });
+  </script>
+</body>
+</html>
