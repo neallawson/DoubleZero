@@ -378,9 +378,6 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
       <>
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={onBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
             <DialogTitle>Teams</DialogTitle>
             <Button size="sm" onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-1" />

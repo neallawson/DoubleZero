@@ -5,6 +5,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { LockerRoomPage } from '@/pages/LockerRoomPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { TeamSelectPage } from '@/pages/TeamSelectPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,7 +26,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function HomeRedirect() {
-  const { isAdmin, isLoading } = useAuth();
+  const { isAdmin, isLoading, teamMemberships } = useAuth();
 
   if (isLoading) {
     return (
@@ -40,9 +41,18 @@ function HomeRedirect() {
     return <Navigate to="/admin" replace />;
   }
 
-  // For now, all non-admin users go to profile (until we have team membership)
-  // TODO: Check team membership and redirect to locker room if on a team
-  return <Navigate to="/profile" replace />;
+  // No teams → profile
+  if (teamMemberships.length === 0) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  // Multiple teams → go to team selection (they have a default, but can change)
+  if (teamMemberships.length > 1) {
+    return <Navigate to="/select-team" replace />;
+  }
+
+  // 1 team → go straight to locker room
+  return <Navigate to="/locker-room" replace />;
 }
 
 function AppRoutes() {
@@ -61,6 +71,7 @@ function AppRoutes() {
         <Route path="admin" element={<AdminDashboardPage />} />
         <Route path="locker-room" element={<LockerRoomPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="select-team" element={<TeamSelectPage />} />
       </Route>
     </Routes>
   );

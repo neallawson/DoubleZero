@@ -9,4 +9,3 @@ export * from './location';
 export * from './roster';
 export * from './game';
 export * from './audit';
-export * from './config';

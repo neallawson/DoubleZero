@@ -1,10 +1,11 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { teamMember, person } from '../db/schema/index.js';
+import { teamMember, person, teamPermissionEnum } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 
-// Permission levels for team access (from schema enum)
-export type TeamPermission = 'TEAM_ADMIN' | 'TEAM_MEMBER';
+// Permission levels for team access - derived from schema enum to prevent drift
+// The enum values are: 'ADMIN', 'MEMBER', 'VIEWER'
+export type TeamPermission = (typeof teamPermissionEnum.enumValues)[number];
 
 /**
  * Grails-style security: DENY BY DEFAULT
@@ -77,8 +78,9 @@ export function hasPermission(
   requiredPermission: TeamPermission
 ): boolean {
   const levels: Record<TeamPermission, number> = {
-    TEAM_MEMBER: 1,
-    TEAM_ADMIN: 2,
+    VIEWER: 1,
+    MEMBER: 2,
+    ADMIN: 3,
   };
   return levels[userPermission] >= levels[requiredPermission];
 }
@@ -198,19 +200,19 @@ export function requireTeamPermission(
 }
 
 /**
- * Convenience: Require TEAM_ADMIN permission (or system ADMIN)
+ * Convenience: Require ADMIN permission on team (or system ADMIN)
  */
 export function requireTeamAdmin(
   getTeamAndSeason: (req: Request) => Promise<{ teamId: number; seasonId: number } | null>
 ) {
-  return requireTeamPermission(getTeamAndSeason, 'TEAM_ADMIN');
+  return requireTeamPermission(getTeamAndSeason, 'ADMIN');
 }
 
 /**
- * Convenience: Require TEAM_MEMBER permission (or system ADMIN)
+ * Convenience: Require MEMBER permission on team (or system ADMIN)
  */
 export function requireTeamMember(
   getTeamAndSeason: (req: Request) => Promise<{ teamId: number; seasonId: number } | null>
 ) {
-  return requireTeamPermission(getTeamAndSeason, 'TEAM_MEMBER');
+  return requireTeamPermission(getTeamAndSeason, 'MEMBER');
 }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { personsApi, type Person } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 
 interface PersonCrudModalProps {
@@ -22,6 +23,7 @@ interface PersonCrudModalProps {
 type ViewMode = 'list' | 'view' | 'edit' | 'create';
 
 export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonCrudModalProps) {
+  const { isAdmin, isTeamAdmin, activeTeam } = useAuth();
   const [persons, setPersons] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -94,7 +96,15 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
     setIsLoading(true);
     setError('');
 
-    const payload = {
+    const payload: {
+      displayName: string;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+      phone: string | null;
+      dateOfBirth: string | null;
+      teamId?: number;
+    } = {
       displayName: formData.displayName,
       firstName: formData.firstName || null,
       lastName: formData.lastName || null,
@@ -103,12 +113,20 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
       dateOfBirth: formData.dateOfBirth || null,
     };
 
+    // If user is a team admin (not system admin), include active team ID
+    // This will auto-create team membership for the new person
+    if (!isAdmin && isTeamAdmin && activeTeam) {
+      payload.teamId = activeTeam.teamId;
+    }
+
     if (viewMode === 'create') {
       const response = await personsApi.create(payload);
       setIsLoading(false);
       if (response.success && response.data) {
-        setPersons([...persons, response.data]);
-        setSelectedPerson(response.data);
+        // Response may be { person, membership } or just person depending on whether teamId was provided
+        const personData = 'person' in response.data ? response.data.person : response.data;
+        setPersons([...persons, personData]);
+        setSelectedPerson(personData);
         setViewMode('view');
       } else {
         setError(response.error?.message || 'Failed to create person');

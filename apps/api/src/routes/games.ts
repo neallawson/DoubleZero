@@ -4,6 +4,7 @@ import { game, gameParticipant, gameOfficial, gameEvent } from '../db/schema/ind
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, requireTeamAdmin } from '../middleware/permissions.js';
+import { validate, CreateGameSchema, UpdateGameSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -73,13 +74,9 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
  * POST /games - Create a game
  * Access: ADMIN only (games involve multiple teams)
  */
-router.post('/', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/', requireAdmin(), validate(CreateGameSchema), async (req: Request, res: Response) => {
   try {
     const { seasonId, locationId, gameTypeId, statusId, date, startTime, endTime, homeTeamId, awayTeamId, notes } = req.body;
-
-    if (!seasonId || !homeTeamId || !awayTeamId) {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Season, home team, and away team are required' } });
-    }
 
     const [created] = await db.insert(game).values({
       seasonId, locationId, gameTypeId, statusId, date, startTime, endTime, homeTeamId, awayTeamId, notes
@@ -96,7 +93,7 @@ router.post('/', requireAdmin(), async (req: Request, res: Response) => {
  * PATCH /games/:id - Update a game
  * Access: ADMIN or TEAM_ADMIN of home team
  */
-router.patch('/:id', requireTeamAdmin(getGameTeamContext), async (req: Request, res: Response) => {
+router.patch('/:id', requireTeamAdmin(getGameTeamContext), validate(UpdateGameSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
@@ -104,10 +101,6 @@ router.patch('/:id', requireTeamAdmin(getGameTeamContext), async (req: Request, 
     }
 
     const { locationId, gameTypeId, statusId, date, startTime, endTime, homeScore, awayScore, attendance, weather, notes, version } = req.body;
-
-    if (typeof version !== 'number') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Version is required' } });
-    }
 
     const [updated] = await db
       .update(game)

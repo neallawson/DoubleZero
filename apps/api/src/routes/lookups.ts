@@ -4,6 +4,7 @@ import { teamRole, playerPosition, gameType, gameStatus, gameEventType } from '.
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/permissions.js';
+import { validate, CreateLookupSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -36,16 +37,9 @@ router.get('/team-roles', async (_req: Request, res: Response) => {
  * POST /team-roles - Create a team role
  * Access: ADMIN only
  */
-router.post('/team-roles', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/team-roles', requireAdmin(), validate(CreateLookupSchema), async (req: Request, res: Response) => {
   try {
     const { name, description } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     const [created] = await db
       .insert(teamRole)
@@ -94,16 +88,9 @@ router.get('/player-positions', async (_req: Request, res: Response) => {
  * POST /player-positions - Create a player position
  * Access: ADMIN only
  */
-router.post('/player-positions', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/player-positions', requireAdmin(), validate(CreateLookupSchema), async (req: Request, res: Response) => {
   try {
     const { name, shortName, description } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     const [created] = await db
       .insert(playerPosition)
@@ -152,16 +139,9 @@ router.get('/game-types', async (_req: Request, res: Response) => {
  * POST /game-types - Create a game type
  * Access: ADMIN only
  */
-router.post('/game-types', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/game-types', requireAdmin(), validate(CreateLookupSchema), async (req: Request, res: Response) => {
   try {
     const { name, description } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     const [created] = await db
       .insert(gameType)
@@ -210,16 +190,9 @@ router.get('/game-statuses', async (_req: Request, res: Response) => {
  * POST /game-statuses - Create a game status
  * Access: ADMIN only
  */
-router.post('/game-statuses', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/game-statuses', requireAdmin(), validate(CreateLookupSchema), async (req: Request, res: Response) => {
   try {
     const { name } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     const [created] = await db
       .insert(gameStatus)
@@ -268,16 +241,9 @@ router.get('/game-event-types', async (_req: Request, res: Response) => {
  * POST /game-event-types - Create a game event type
  * Access: ADMIN only
  */
-router.post('/game-event-types', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/game-event-types', requireAdmin(), validate(CreateLookupSchema), async (req: Request, res: Response) => {
   try {
     const { name, description } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     const [created] = await db
       .insert(gameEventType)

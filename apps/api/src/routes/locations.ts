@@ -4,6 +4,7 @@ import { location } from '../db/schema/index.js';
 import { eq, and, ilike } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
+import { validate, CreateLocationSchema, UpdateLocationSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -57,13 +58,9 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
  * POST /locations - Create a location
  * Access: ADMIN only
  */
-router.post('/', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/', requireAdmin(), validate(CreateLocationSchema), async (req: Request, res: Response) => {
   try {
     const { name, address, city, state, zip, country, homeTeamId } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Name is required' } });
-    }
 
     const [created] = await db.insert(location).values({ 
       name, address, city, state, zip, country, homeTeamId 
@@ -80,7 +77,7 @@ router.post('/', requireAdmin(), async (req: Request, res: Response) => {
  * PATCH /locations/:id - Update a location
  * Access: ADMIN only
  */
-router.patch('/:id', requireAdmin(), async (req: Request, res: Response) => {
+router.patch('/:id', requireAdmin(), validate(UpdateLocationSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
@@ -88,10 +85,6 @@ router.patch('/:id', requireAdmin(), async (req: Request, res: Response) => {
     }
 
     const { name, address, city, state, zip, country, homeTeamId, isActive, version } = req.body;
-
-    if (typeof version !== 'number') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Version is required' } });
-    }
 
     const [updated] = await db
       .update(location)

@@ -2,7 +2,8 @@ import { Router, type Request, type Response, type IRouter } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { user, userRole } from '../db/schema/user.js';
-import { eq } from 'drizzle-orm';
+import { person, teamMember, team } from '../db/schema/index.js';
+import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 import { createSession, getSession, deleteSession } from '../middleware/auth.js';
 
@@ -195,6 +196,36 @@ router.get('/me', async (req: Request, res: Response) => {
     // Get roles
     const roles = await db.select().from(userRole).where(eq(userRole.userId, foundUser.id));
 
+    // Get user's team memberships via their linked person
+    let teamMemberships: Array<{
+      teamId: number;
+      teamName: string;
+      permission: string;
+      seasonId: number;
+    }> = [];
+
+    // Find the person linked to this user
+    const [linkedPerson] = await db.select().from(person).where(eq(person.userId, foundUser.id)).limit(1);
+    
+    if (linkedPerson) {
+      // Get their active team memberships
+      const memberships = await db
+        .select({
+          teamId: teamMember.teamId,
+          teamName: team.name,
+          permission: teamMember.permission,
+          seasonId: teamMember.seasonId,
+        })
+        .from(teamMember)
+        .innerJoin(team, eq(teamMember.teamId, team.id))
+        .where(and(
+          eq(teamMember.personId, linkedPerson.id),
+          eq(teamMember.isActive, true)
+        ));
+      
+      teamMemberships = memberships;
+    }
+
     res.json({
       success: true,
       data: {
@@ -204,6 +235,11 @@ router.get('/me', async (req: Request, res: Response) => {
         isActive: foundUser.isActive,
         roles: roles.map(r => r.role),
         createdAt: foundUser.createdAt,
+        teamMemberships,
+        person: linkedPerson ? {
+          id: linkedPerson.id,
+          displayName: linkedPerson.displayName,
+        } : null,
       },
     });
   } catch (error) {

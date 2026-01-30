@@ -82,12 +82,24 @@ class ApiClient {
 export const api = new ApiClient();
 
 // Auth API
+export interface TeamMembership {
+  teamId: number;
+  teamName: string;
+  permission: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  seasonId: number;
+}
+
 export interface User {
   id: number;
   email: string;
   isVerified: boolean;
   isActive: boolean;
   roles: string[];
+  teamMemberships?: TeamMembership[];
+  person?: {
+    id: number;
+    displayName: string;
+  } | null;
 }
 
 export interface LoginResponse {
@@ -262,6 +274,7 @@ export interface AdminUser {
 export const usersApi = {
   list: () => api.get<AdminUser[]>('/v1/users'),
   get: (id: number) => api.get<AdminUser>(`/v1/users/${id}`),
+  create: (data: { email: string; password: string }) => api.post<AdminUser>('/v1/users', data),
   update: (id: number, data: { isActive?: boolean; isVerified?: boolean; version: number }) => 
     api.patch<AdminUser>(`/v1/users/${id}`, data),
   addRole: (id: number, role: 'ADMIN' | 'USER') => api.post(`/v1/users/${id}/roles`, { role }),

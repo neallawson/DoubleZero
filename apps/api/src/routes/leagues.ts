@@ -4,6 +4,7 @@ import { league, season } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
+import { validate, CreateLeagueSchema, UpdateLeagueSchema, CreateSeasonSchema, UpdateSeasonSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -73,16 +74,9 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
  * POST /leagues - Create a league
  * Access: ADMIN only
  */
-router.post('/', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/', requireAdmin(), validate(CreateLeagueSchema), async (req: Request, res: Response) => {
   try {
     const { name, description, governingBody } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     const [created] = await db
       .insert(league)
@@ -109,7 +103,7 @@ router.post('/', requireAdmin(), async (req: Request, res: Response) => {
  * PATCH /leagues/:id - Update a league
  * Access: ADMIN only
  */
-router.patch('/:id', requireAdmin(), async (req: Request, res: Response) => {
+router.patch('/:id', requireAdmin(), validate(UpdateLeagueSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
@@ -120,14 +114,6 @@ router.patch('/:id', requireAdmin(), async (req: Request, res: Response) => {
     }
 
     const { name, description, governingBody, activeSeasonId, isActive, version } = req.body;
-
-    // Optimistic locking
-    if (typeof version !== 'number') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Version is required for updates' },
-      });
-    }
 
     const [updated] = await db
       .update(league)
@@ -270,7 +256,7 @@ router.get('/:leagueId/seasons/:id', requireAuthenticated(), async (req: Request
  * POST /leagues/:leagueId/seasons - Create a season
  * Access: ADMIN only
  */
-router.post('/:leagueId/seasons', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/:leagueId/seasons', requireAdmin(), validate(CreateSeasonSchema), async (req: Request, res: Response) => {
   try {
     const leagueId = parseInt(req.params.leagueId ?? '', 10);
     if (isNaN(leagueId)) {
@@ -281,13 +267,6 @@ router.post('/:leagueId/seasons', requireAdmin(), async (req: Request, res: Resp
     }
 
     const { name, startDate, endDate } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Name is required' },
-      });
-    }
 
     // Verify league exists
     const [leagueExists] = await db
@@ -322,7 +301,7 @@ router.post('/:leagueId/seasons', requireAdmin(), async (req: Request, res: Resp
  * PATCH /leagues/:leagueId/seasons/:id - Update a season
  * Access: ADMIN only
  */
-router.patch('/:leagueId/seasons/:id', requireAdmin(), async (req: Request, res: Response) => {
+router.patch('/:leagueId/seasons/:id', requireAdmin(), validate(UpdateSeasonSchema), async (req: Request, res: Response) => {
   try {
     const leagueId = parseInt(req.params.leagueId ?? '', 10);
     const id = parseInt(req.params.id ?? '', 10);
@@ -334,13 +313,6 @@ router.patch('/:leagueId/seasons/:id', requireAdmin(), async (req: Request, res:
     }
 
     const { name, startDate, endDate, isActive, version } = req.body;
-
-    if (typeof version !== 'number') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Version is required for updates' },
-      });
-    }
 
     const [updated] = await db
       .update(season)

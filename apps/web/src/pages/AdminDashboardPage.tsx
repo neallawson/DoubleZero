@@ -11,6 +11,7 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { 
   Shield, 
   ShieldOff, 
@@ -20,7 +21,8 @@ import {
   Unlink, 
   Loader2,
   ChevronRight,
-  Users
+  Users,
+  Plus
 } from 'lucide-react';
 
 export function AdminDashboardPage() {
@@ -31,6 +33,9 @@ export function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
+  const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({ email: '', password: '' });
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -126,6 +131,30 @@ export function AdminDashboardPage() {
     }
   }
 
+  async function handleCreateUser() {
+    if (!newUserForm.email || !newUserForm.password) {
+      alert('Email and password are required');
+      return;
+    }
+    if (newUserForm.password.length < 8) {
+      alert('Password must be at least 8 characters');
+      return;
+    }
+
+    setIsCreating(true);
+    const response = await usersApi.create(newUserForm);
+    setIsCreating(false);
+
+    if (response.success && response.data) {
+      setUsers([...users, response.data]);
+      setNewUserForm({ email: '', password: '' });
+      setIsNewUserDialogOpen(false);
+      setSelectedUser(response.data);
+    } else {
+      alert(response.error?.message || 'Failed to create user');
+    }
+  }
+
   // Get unlinked persons for the link dialog
   const unlinkedPersons = persons.filter(p => !p.userId);
 
@@ -158,11 +187,19 @@ export function AdminDashboardPage() {
         {/* User List */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Users ({users.length})
-            </CardTitle>
-            <CardDescription>Manage user accounts and permissions</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Users ({users.length})
+                </CardTitle>
+                <CardDescription>Manage user accounts and permissions</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => setIsNewUserDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                New User
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -345,6 +382,52 @@ export function AdminDashboardPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsLinkDialogOpen(false)}>
               Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New User Dialog */}
+      <Dialog open={isNewUserDialogOpen} onOpenChange={setIsNewUserDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New User</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={newUserForm.email}
+                onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Minimum 8 characters"
+                value={newUserForm.password}
+                onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewUserDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateUser} disabled={isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create User'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

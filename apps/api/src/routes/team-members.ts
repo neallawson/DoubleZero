@@ -4,6 +4,7 @@ import { teamMember, team, person, teamRole, playerPosition } from '../db/schema
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireTeamAdmin, requireTeamMember } from '../middleware/permissions.js';
+import { validate, CreateTeamMemberSchema, UpdateTeamMemberSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -116,21 +117,21 @@ router.get('/:teamId/members/:id', requireTeamMember(getTeamContext), async (req
  * POST /teams/:teamId/members - Add a team member
  * Access: TEAM_ADMIN or higher
  */
-router.post('/:teamId/members', requireTeamAdmin(getTeamContext), async (req: Request, res: Response) => {
+router.post('/:teamId/members', requireTeamAdmin(getTeamContext), validate(CreateTeamMemberSchema), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     if (isNaN(teamId)) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid team ID' } });
     }
 
-    const { personId, seasonId, permission, teamRoleId, positionId, jerseyNumber, title } = req.body;
+    // Get seasonId from team's active season
+    const [t] = await db.select({ activeSeasonId: team.activeSeasonId }).from(team).where(eq(team.id, teamId)).limit(1);
+    if (!t || !t.activeSeasonId) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Team has no active season' } });
+    }
+    const seasonId = t.activeSeasonId;
 
-    if (!personId || typeof personId !== 'number') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Person ID is required' } });
-    }
-    if (!seasonId || typeof seasonId !== 'number') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Season ID is required' } });
-    }
+    const { personId, permission, teamRoleId, positionId, jerseyNumber, title } = req.body;
 
     // Map frontend permission names to DB enum values
     // Frontend uses TEAM_ADMIN/TEAM_MEMBER, DB uses ADMIN/MEMBER
@@ -163,7 +164,7 @@ router.post('/:teamId/members', requireTeamAdmin(getTeamContext), async (req: Re
  * PATCH /teams/:teamId/members/:id - Update a team member
  * Access: TEAM_ADMIN or higher
  */
-router.patch('/:teamId/members/:id', requireTeamAdmin(getTeamContext), async (req: Request, res: Response) => {
+router.patch('/:teamId/members/:id', requireTeamAdmin(getTeamContext), validate(UpdateTeamMemberSchema), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     const id = parseInt(req.params.id ?? '', 10);
@@ -172,10 +173,6 @@ router.patch('/:teamId/members/:id', requireTeamAdmin(getTeamContext), async (re
     }
 
     const { permission, teamRoleId, positionId, jerseyNumber, title, isActive, version } = req.body;
-
-    if (typeof version !== 'number') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Version is required' } });
-    }
 
     // Map frontend permission names to DB enum values
     let mappedPermission: 'ADMIN' | 'MEMBER' | 'VIEWER' | undefined;

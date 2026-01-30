@@ -19,10 +19,25 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: [
-    process.env.WEB_URL || 'http://localhost:3001',
-    process.env.MOBILE_URL || 'exp://localhost:8081',
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost and local network IPs
+    const allowedPatterns = [
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Local network
+      /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,  // Local network
+      /^exp:\/\//,                          // Expo
+    ];
+    
+    if (allowedPatterns.some(pattern => pattern.test(origin))) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -61,9 +76,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 DoubleZero API running on http://localhost:${PORT}`);
+// Start server - bind to 0.0.0.0 for local network access
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`🚀 DoubleZero API running on http://${HOST}:${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 

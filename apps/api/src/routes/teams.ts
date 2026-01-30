@@ -4,6 +4,7 @@ import { team, lockerRoom } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, requireTeamAdmin, requireTeamMember } from '../middleware/permissions.js';
+import { validate, CreateTeamSchema, UpdateTeamSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -61,13 +62,9 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
  * POST /teams - Create a team
  * Access: ADMIN only
  */
-router.post('/', requireAdmin(), async (req: Request, res: Response) => {
+router.post('/', requireAdmin(), validate(CreateTeamSchema), async (req: Request, res: Response) => {
   try {
     const { name, shortName, leagueId, primaryColor, secondaryColor } = req.body;
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Name is required' } });
-    }
 
     const [created] = await db.insert(team).values({ name, shortName, leagueId, primaryColor, secondaryColor }).returning();
     res.status(201).json({ success: true, data: created });
@@ -81,7 +78,7 @@ router.post('/', requireAdmin(), async (req: Request, res: Response) => {
  * PATCH /teams/:id - Update a team
  * Access: ADMIN or TEAM_ADMIN
  */
-router.patch('/:id', requireTeamAdmin(getTeamContext), async (req: Request, res: Response) => {
+router.patch('/:id', requireTeamAdmin(getTeamContext), validate(UpdateTeamSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
@@ -89,10 +86,6 @@ router.patch('/:id', requireTeamAdmin(getTeamContext), async (req: Request, res:
     }
 
     const { name, shortName, primaryColor, secondaryColor, activeSeasonId, isActive, version } = req.body;
-
-    if (typeof version !== 'number') {
-      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Version is required' } });
-    }
 
     const [updated] = await db
       .update(team)
