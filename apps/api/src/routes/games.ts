@@ -3,22 +3,32 @@ import { db } from '../db/index.js';
 import { game, gameParticipant, gameOfficial, gameEvent } from '../db/schema/index.js';
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireAdmin, requireAuthenticated, requireTeamAdmin } from '../middleware/permissions.js';
+import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
 import { validate, CreateGameSchema, UpdateGameSchema } from '../validation/index.js';
+import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
 
 router.use(requireAuth);
 
-// Helper to get team context from a game
-async function getGameTeamContext(req: Request): Promise<{ teamId: number; seasonId: number } | null> {
+// Helper to get sandbox entity context for a game (handles both :id and :gameId params)
+async function getGameEntityContext(req: Request): Promise<SandboxEntityContext | null> {
   const gameId = parseInt(req.params.gameId ?? req.params.id ?? '', 10);
   if (isNaN(gameId)) return null;
   
-  const [g] = await db.select({ homeTeamId: game.homeTeamId, seasonId: game.seasonId }).from(game).where(eq(game.id, gameId)).limit(1);
-  if (!g || !g.homeTeamId || !g.seasonId) return null;
+  const [g] = await db
+    .select({ id: game.id, sandboxId: game.sandboxId, homeTeamId: game.homeTeamId })
+    .from(game)
+    .where(eq(game.id, gameId))
+    .limit(1);
   
-  return { teamId: g.homeTeamId, seasonId: g.seasonId };
+  if (!g) return null;
+  
+  // For games: sandboxId determines ownership, entityTeamId is homeTeamId (for public games)
+  return {
+    sandboxId: g.sandboxId,
+    entityTeamId: g.sandboxId === null ? g.homeTeamId : null,
+  };
 }
 
 /**
@@ -28,15 +38,16 @@ async function getGameTeamContext(req: Request): Promise<{ teamId: number; seaso
 router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
   try {
     const { teamId, seasonId } = req.query;
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
     
-    let whereClause;
+    let whereClause = sandboxFilter(game.sandboxId, activeSandboxId);
     if (teamId) {
       const tid = parseInt(teamId as string, 10);
-      whereClause = or(eq(game.homeTeamId, tid), eq(game.awayTeamId, tid));
+      whereClause = and(whereClause, or(eq(game.homeTeamId, tid), eq(game.awayTeamId, tid)))!;
     }
     if (seasonId) {
       const sid = parseInt(seasonId as string, 10);
-      whereClause = whereClause ? and(whereClause, eq(game.seasonId, sid)) : eq(game.seasonId, sid);
+      whereClause = and(whereClause, eq(game.seasonId, sid))!;
     }
 
     const games = await db.select().from(game).where(whereClause).orderBy(game.date);
@@ -58,7 +69,15 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
       return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid game ID' } });
     }
 
-    const [found] = await db.select().from(game).where(eq(game.id, id)).limit(1);
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
+    const [found] = await db
+      .select()
+      .from(game)
+      .where(and(
+        eq(game.id, id),
+        sandboxFilter(game.sandboxId, activeSandboxId)
+      ))
+      .limit(1);
     if (!found) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Game not found' } });
     }
@@ -72,14 +91,21 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
 /**
  * POST /games - Create a game
- * Access: ADMIN only (games involve multiple teams)
+ * Access: ADMIN (creates public game) or TEAM_ADMIN with active team (creates sandboxed game)
  */
-router.post('/', requireAdmin(), validate(CreateGameSchema), async (req: Request, res: Response) => {
+router.post('/', requireAdminOrTeamAdmin(), validate(CreateGameSchema), async (req: Request, res: Response) => {
   try {
     const { seasonId, locationId, gameTypeId, statusId, date, startTime, endTime, homeTeamId, awayTeamId, notes } = req.body;
+    const activeTeamId = req.user!.activeTeamId;
+
+    // Determine sandboxId based on context
+    let sandboxId: number | null = null;
+    if (activeTeamId) {
+      sandboxId = await getOrCreateTeamSandbox(activeTeamId);
+    }
 
     const [created] = await db.insert(game).values({
-      seasonId, locationId, gameTypeId, statusId, date, startTime, endTime, homeTeamId, awayTeamId, notes
+      seasonId, locationId, gameTypeId, statusId, date, startTime, endTime, homeTeamId, awayTeamId, notes, sandboxId
     }).returning();
 
     res.status(201).json({ success: true, data: created });
@@ -91,9 +117,9 @@ router.post('/', requireAdmin(), validate(CreateGameSchema), async (req: Request
 
 /**
  * PATCH /games/:id - Update a game
- * Access: ADMIN or TEAM_ADMIN of home team
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed games), or TEAM_ADMIN of home team (for public games)
  */
-router.patch('/:id', requireTeamAdmin(getGameTeamContext), validate(UpdateGameSchema), async (req: Request, res: Response) => {
+router.patch('/:id', requireSandboxOwnerPermission(getGameEntityContext), validate(UpdateGameSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
@@ -178,9 +204,9 @@ router.get('/:gameId/participants', requireAuthenticated(), async (req: Request,
 
 /**
  * POST /games/:gameId/participants - Add a participant
- * Access: TEAM_ADMIN of home team
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed games), or TEAM_ADMIN of home team (for public games)
  */
-router.post('/:gameId/participants', requireTeamAdmin(getGameTeamContext), async (req: Request, res: Response) => {
+router.post('/:gameId/participants', requireSandboxOwnerPermission(getGameEntityContext), async (req: Request, res: Response) => {
   try {
     const gameId = parseInt(req.params.gameId ?? '', 10);
     if (isNaN(gameId)) {
@@ -280,9 +306,9 @@ router.get('/:gameId/events', requireAuthenticated(), async (req: Request, res: 
 
 /**
  * POST /games/:gameId/events - Add an event
- * Access: TEAM_ADMIN of home team
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed games), or TEAM_ADMIN of home team (for public games)
  */
-router.post('/:gameId/events', requireTeamAdmin(getGameTeamContext), async (req: Request, res: Response) => {
+router.post('/:gameId/events', requireSandboxOwnerPermission(getGameEntityContext), async (req: Request, res: Response) => {
   try {
     const { gameParticipantId, eventTypeId, matchMinute, matchSecond, fieldX, fieldY, notes, relatedParticipantId } = req.body;
 

@@ -3,12 +3,34 @@ import { db } from '../db/index.js';
 import { person, teamMember, team } from '../db/schema/index.js';
 import { eq, and, ilike, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireAdmin, requireAuthenticated, getPersonForUser, isAdmin, getTeamMembership } from '../middleware/permissions.js';
+import { requireAdmin, requireAuthenticated, getPersonForUser, isAdmin, getTeamMembership, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
 import { validate, CreatePersonSchema, UpdatePersonSchema } from '../validation/index.js';
+import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
 
 router.use(requireAuth);
+
+// Helper to get sandbox entity context for a person
+async function getPersonEntityContext(req: Request): Promise<SandboxEntityContext | null> {
+  const personId = parseInt(req.params.id ?? '', 10);
+  if (isNaN(personId)) return null;
+  
+  const [p] = await db
+    .select({ id: person.id, sandboxId: person.sandboxId })
+    .from(person)
+    .where(eq(person.id, personId))
+    .limit(1);
+  
+  if (!p) return null;
+  
+  // Persons don't have a direct team association - only sandbox ownership matters
+  // Public persons require ADMIN to edit (unless it's their own profile via /me)
+  return {
+    sandboxId: p.sandboxId,
+    entityTeamId: null,
+  };
+}
 
 /**
  * GET /persons - List persons (with optional search)
@@ -48,23 +70,22 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
 
     const { search } = req.query;
     
-    let query = db.select().from(person).where(eq(person.isActive, true));
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
+    let whereClause = and(eq(person.isActive, true), sandboxFilter(person.sandboxId, activeSandboxId))!;
     
     if (search && typeof search === 'string') {
-      query = db.select().from(person).where(
-        and(
-          eq(person.isActive, true),
-          or(
-            ilike(person.displayName, `%${search}%`),
-            ilike(person.firstName, `%${search}%`),
-            ilike(person.lastName, `%${search}%`),
-            ilike(person.email, `%${search}%`)
-          )
+      whereClause = and(
+        whereClause,
+        or(
+          ilike(person.displayName, `%${search}%`),
+          ilike(person.firstName, `%${search}%`),
+          ilike(person.lastName, `%${search}%`),
+          ilike(person.email, `%${search}%`)
         )
-      );
+      )!;
     }
 
-    const persons = await query.orderBy(person.displayName);
+    const persons = await db.select().from(person).where(whereClause).orderBy(person.displayName);
     res.json({ success: true, data: persons });
   } catch (error) {
     console.error('Error fetching persons:', error);
@@ -106,7 +127,15 @@ router.get('/:id', requireAdmin(), async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid person ID' } });
     }
 
-    const [found] = await db.select().from(person).where(eq(person.id, id)).limit(1);
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
+    const [found] = await db
+      .select()
+      .from(person)
+      .where(and(
+        eq(person.id, id),
+        sandboxFilter(person.sandboxId, activeSandboxId)
+      ))
+      .limit(1);
     if (!found) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Person not found' } });
     }
@@ -186,8 +215,15 @@ router.post('/', requireAuthenticated(), validate(CreatePersonSchema), async (re
 
     // Create person and optionally team membership in a transaction
     const result = await db.transaction(async (tx) => {
+      // If teamId provided, person goes into that team's sandbox
+      // Otherwise (ADMIN creating), person is public
+      let sandboxId: number | null = null;
+      if (teamId) {
+        sandboxId = await getOrCreateTeamSandbox(teamId);
+      }
+
       const [created] = await tx.insert(person).values({ 
-        displayName, firstName, lastName, email, phone, dateOfBirth, userId 
+        displayName, firstName, lastName, email, phone, dateOfBirth, userId, sandboxId 
       }).returning();
 
       if (!created) throw new Error('Failed to create person');
@@ -272,42 +308,13 @@ router.patch('/me', requireAuthenticated(), async (req: Request, res: Response) 
 
 /**
  * PATCH /persons/:id - Update a person
- * Access: ADMIN or any Team ADMIN (global editing by team admins)
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed persons)
  */
-router.patch('/:id', requireAuthenticated(), validate(UpdatePersonSchema), async (req: Request, res: Response) => {
+router.patch('/:id', requireSandboxOwnerPermission(getPersonEntityContext), validate(UpdatePersonSchema), async (req: Request, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
-    }
-
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
       return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid person ID' } });
-    }
-
-    const userIsAdmin = isAdmin(req);
-
-    // If not system admin, check if they're a team admin on any team
-    if (!userIsAdmin) {
-      const personId = await getPersonForUser(req.user.id);
-      if (!personId) {
-        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'No person profile linked' } });
-      }
-      
-      // Check if user has ADMIN permission on any team
-      const adminMemberships = await db
-        .select({ id: teamMember.id })
-        .from(teamMember)
-        .where(and(
-          eq(teamMember.personId, personId),
-          eq(teamMember.permission, 'ADMIN'),
-          eq(teamMember.isActive, true)
-        ))
-        .limit(1);
-      
-      if (adminMemberships.length === 0) {
-        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Team admin access required' } });
-      }
     }
 
     const { displayName, firstName, lastName, email, phone, dateOfBirth, version } = req.body;

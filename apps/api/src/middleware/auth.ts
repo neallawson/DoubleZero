@@ -1,7 +1,7 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { user, userRole } from '../db/schema/user.js';
-import { eq } from 'drizzle-orm';
+import { user, userRole, session, userSessionState } from '../db/schema/user.js';
+import { eq, and, gt } from 'drizzle-orm';
 import crypto from 'crypto';
 
 // Extend Express Request type
@@ -14,33 +14,65 @@ declare global {
         isVerified: boolean;
         isActive: boolean;
         roles: string[];
+        activeTeamId: number | null;
+        sessionId: string;
       };
     }
   }
 }
 
-// Simple session store (shared with auth routes - in production use Redis)
-const sessions = new Map<string, { userId: number; expiresAt: Date }>();
+// Database-backed session management
+export async function getSession(token: string): Promise<{ userId: number; sessionId: string; activeTeamId: number | null } | null> {
+  const [found] = await db
+    .select({
+      sessionId: session.id,
+      userId: session.userId,
+      expiresAt: session.expiresAt,
+      activeTeamId: userSessionState.activeTeamId,
+    })
+    .from(session)
+    .leftJoin(userSessionState, eq(userSessionState.sessionId, session.id))
+    .where(and(
+      eq(session.token, token),
+      gt(session.expiresAt, new Date())
+    ))
+    .limit(1);
 
-export function getSession(token: string): { userId: number } | null {
-  const session = sessions.get(token);
-  if (!session) return null;
-  if (session.expiresAt < new Date()) {
-    sessions.delete(token);
-    return null;
-  }
-  return { userId: session.userId };
+  if (!found) return null;
+  return { userId: found.userId, sessionId: found.sessionId, activeTeamId: found.activeTeamId };
 }
 
-export function createSession(userId: number): string {
+export async function createSession(userId: number, activeTeamId: number | null): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex');
+  const sessionId = crypto.randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-  sessions.set(token, { userId, expiresAt });
+
+  await db.transaction(async (tx) => {
+    await tx.insert(session).values({
+      id: sessionId,
+      userId,
+      token,
+      expiresAt,
+    });
+
+    await tx.insert(userSessionState).values({
+      sessionId,
+      activeTeamId,
+    });
+  });
+
   return token;
 }
 
-export function deleteSession(token: string): void {
-  sessions.delete(token);
+export async function deleteSession(token: string): Promise<void> {
+  await db.delete(session).where(eq(session.token, token));
+}
+
+export async function setActiveTeam(sessionId: string, teamId: number): Promise<void> {
+  await db
+    .update(userSessionState)
+    .set({ activeTeamId: teamId })
+    .where(eq(userSessionState.sessionId, sessionId));
 }
 
 // Authentication middleware - requires valid session
@@ -54,8 +86,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const session = getSession(token);
-    if (!session) {
+    const sessionData = await getSession(token);
+    if (!sessionData) {
       return res.status(401).json({
         success: false,
         error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
@@ -63,7 +95,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     // Get user
-    const [foundUser] = await db.select().from(user).where(eq(user.id, session.userId)).limit(1);
+    const [foundUser] = await db.select().from(user).where(eq(user.id, sessionData.userId)).limit(1);
     if (!foundUser || !foundUser.isActive) {
       return res.status(401).json({
         success: false,
@@ -81,6 +113,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       isVerified: foundUser.isVerified,
       isActive: foundUser.isActive,
       roles: roles.map(r => r.role),
+      activeTeamId: sessionData.activeTeamId,
+      sessionId: sessionData.sessionId,
     };
 
     next();
@@ -123,12 +157,12 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
       return next();
     }
 
-    const session = getSession(token);
-    if (!session) {
+    const sessionData = await getSession(token);
+    if (!sessionData) {
       return next();
     }
 
-    const [foundUser] = await db.select().from(user).where(eq(user.id, session.userId)).limit(1);
+    const [foundUser] = await db.select().from(user).where(eq(user.id, sessionData.userId)).limit(1);
     if (foundUser && foundUser.isActive) {
       const roles = await db.select().from(userRole).where(eq(userRole.userId, foundUser.id));
       req.user = {
@@ -137,6 +171,8 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
         isVerified: foundUser.isVerified,
         isActive: foundUser.isActive,
         roles: roles.map(r => r.role),
+        activeTeamId: sessionData.activeTeamId,
+        sessionId: sessionData.sessionId,
       };
     }
 

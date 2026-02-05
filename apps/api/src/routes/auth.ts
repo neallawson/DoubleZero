@@ -5,7 +5,11 @@ import { user, userRole } from '../db/schema/user.js';
 import { person, teamMember, team } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
-import { createSession, getSession, deleteSession } from '../middleware/auth.js';
+import { createSession, getSession, deleteSession, setActiveTeam, requireAuth } from '../middleware/auth.js';
+
+const SelectTeamSchema = z.object({
+  teamId: z.number().int().positive(),
+});
 
 const router: IRouter = Router();
 
@@ -72,8 +76,8 @@ router.post('/register', async (req: Request, res: Response) => {
       return created;
     });
 
-    // Create session
-    const token = createSession(newUser.id);
+    // New users have no team memberships, so activeTeamId is null
+    const token = await createSession(newUser.id, null);
 
     res.status(201).json({
       success: true,
@@ -84,6 +88,8 @@ router.post('/register', async (req: Request, res: Response) => {
           isVerified: newUser.isVerified,
         },
         token,
+        requiresTeamSelection: false,
+        teams: [],
       },
     });
   } catch (error) {
@@ -133,20 +139,69 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    // Create session
-    const token = createSession(foundUser.id);
+    // Get user's team memberships via their linked person
+    const [linkedPerson] = await db.select().from(person).where(eq(person.userId, foundUser.id)).limit(1);
+    
+    let teamMemberships: Array<{ teamId: number; teamName: string }> = [];
+    if (linkedPerson) {
+      const memberships = await db
+        .select({
+          teamId: teamMember.teamId,
+          teamName: team.name,
+        })
+        .from(teamMember)
+        .innerJoin(team, eq(teamMember.teamId, team.id))
+        .where(and(
+          eq(teamMember.personId, linkedPerson.id),
+          eq(teamMember.isActive, true)
+        ));
+      teamMemberships = memberships;
+    }
 
-    res.json({
-      success: true,
-      data: {
-        user: {
-          id: foundUser.id,
-          email: foundUser.email,
-          isVerified: foundUser.isVerified,
+    // Determine active team based on membership count
+    if (teamMemberships.length === 0) {
+      // No teams - user can't do much but can still log in
+      const token = await createSession(foundUser.id, null);
+      return res.json({
+        success: true,
+        data: {
+          user: { id: foundUser.id, email: foundUser.email, isVerified: foundUser.isVerified },
+          token,
+          requiresTeamSelection: false,
+          activeTeamId: null,
+          teams: [],
+          message: 'You are not a member of any teams.',
         },
-        token,
-      },
-    });
+      });
+    } else if (teamMemberships.length === 1) {
+      // Exactly one team - auto-select it
+      const activeTeamId = teamMemberships[0]!.teamId;
+      const token = await createSession(foundUser.id, activeTeamId);
+      return res.json({
+        success: true,
+        data: {
+          user: { id: foundUser.id, email: foundUser.email, isVerified: foundUser.isVerified },
+          token,
+          requiresTeamSelection: false,
+          activeTeamId,
+          teams: teamMemberships,
+        },
+      });
+    } else {
+      // Multiple teams - require selection
+      // Create session without activeTeamId, client must call /auth/select-team
+      const token = await createSession(foundUser.id, null);
+      return res.json({
+        success: true,
+        data: {
+          user: { id: foundUser.id, email: foundUser.email, isVerified: foundUser.isVerified },
+          token,
+          requiresTeamSelection: true,
+          activeTeamId: null,
+          teams: teamMemberships,
+        },
+      });
+    }
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
@@ -157,12 +212,69 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', (req: Request, res: Response) => {
+router.post('/logout', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (token) {
-    deleteSession(token);
+    await deleteSession(token);
   }
   res.json({ success: true });
+});
+
+// POST /api/auth/select-team - for users with multiple teams
+router.post('/select-team', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const parsed = SelectTeamSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
+
+    const { teamId } = parsed.data;
+    const userId = req.user!.id;
+    const sessionId = req.user!.sessionId;
+
+    // Verify user is a member of this team
+    const [linkedPerson] = await db.select().from(person).where(eq(person.userId, userId)).limit(1);
+    if (!linkedPerson) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'No person linked to this user' },
+      });
+    }
+
+    const [membership] = await db
+      .select()
+      .from(teamMember)
+      .where(and(
+        eq(teamMember.personId, linkedPerson.id),
+        eq(teamMember.teamId, teamId),
+        eq(teamMember.isActive, true)
+      ))
+      .limit(1);
+
+    if (!membership) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'You are not a member of this team' },
+      });
+    }
+
+    // Update session with selected team
+    await setActiveTeam(sessionId, teamId);
+
+    res.json({
+      success: true,
+      data: { activeTeamId: teamId },
+    });
+  } catch (error) {
+    console.error('Select team error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to select team' },
+    });
+  }
 });
 
 // GET /api/auth/me
@@ -176,8 +288,8 @@ router.get('/me', async (req: Request, res: Response) => {
       });
     }
 
-    const session = getSession(token);
-    if (!session) {
+    const sessionData = await getSession(token);
+    if (!sessionData) {
       return res.status(401).json({
         success: false,
         error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
@@ -185,7 +297,7 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     // Get user with roles
-    const [foundUser] = await db.select().from(user).where(eq(user.id, session.userId)).limit(1);
+    const [foundUser] = await db.select().from(user).where(eq(user.id, sessionData.userId)).limit(1);
     if (!foundUser) {
       return res.status(401).json({
         success: false,
@@ -236,6 +348,7 @@ router.get('/me', async (req: Request, res: Response) => {
         roles: roles.map(r => r.role),
         createdAt: foundUser.createdAt,
         teamMemberships,
+        activeTeamId: sessionData.activeTeamId,
         person: linkedPerson ? {
           id: linkedPerson.id,
           displayName: linkedPerson.displayName,

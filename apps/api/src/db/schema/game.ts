@@ -41,6 +41,7 @@ export const game = pgTable('game', {
   id: serial('id').primaryKey(),
   seasonId: integer('season_id').notNull().references(() => season.id),
   locationId: integer('location_id').references(() => location.id),
+  sandboxId: integer('sandbox_id'), // FK added in sandbox.ts - if set, game is private to owning sandbox
   gameTypeId: integer('game_type_id').notNull().references(() => gameType.id),
   statusId: integer('status_id').notNull().references(() => gameStatus.id),
   date: date('date').notNull(),

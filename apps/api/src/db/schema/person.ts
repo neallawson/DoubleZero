@@ -6,6 +6,7 @@ import { user } from './user';
 // A person can belong to multiple teams via team_member table
 export const person = pgTable('person', {
   id: serial('id').primaryKey(),
+  sandboxId: integer('sandbox_id'), // FK added in sandbox.ts - if set, person is private to owning sandbox
   userId: integer('user_id').unique().references(() => user.id, { onDelete: 'set null' }),
   displayName: varchar('display_name', { length: 100 }).notNull(),
   firstName: varchar('first_name', { length: 50 }),

@@ -1,9 +1,67 @@
 {
-  "id": "6a01164f-ac05-4bd3-ac81-f01257d519f2",
+  "id": "b60b68af-c7ff-4e9a-9fbb-fe38c936f5d4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(255)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.user": {
       "name": "user",
       "schema": "",
@@ -124,6 +182,79 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.user_session_state": {
+      "name": "user_session_state",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active_team_id": {
+          "name": "active_team_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_session_state_session_id_session_id_fk": {
+          "name": "user_session_state_session_id_session_id_fk",
+          "tableFrom": "user_session_state",
+          "tableTo": "session",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_session_state_active_team_id_team_id_fk": {
+          "name": "user_session_state_active_team_id_team_id_fk",
+          "tableFrom": "user_session_state",
+          "tableTo": "team",
+          "columnsFrom": [
+            "active_team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_session_state_session_id_unique": {
+          "name": "user_session_state_session_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "session_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.person": {
       "name": "person",
       "schema": "",
@@ -134,11 +265,11 @@
           "primaryKey": true,
           "notNull": true
         },
-        "locker_room_id": {
-          "name": "locker_room_id",
+        "sandbox_id": {
+          "name": "sandbox_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "user_id": {
           "name": "user_id",
@@ -212,19 +343,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "person_locker_room_id_locker_room_id_fk": {
-          "name": "person_locker_room_id_locker_room_id_fk",
-          "tableFrom": "person",
-          "tableTo": "locker_room",
-          "columnsFrom": [
-            "locker_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "person_user_id_user_id_fk": {
           "name": "person_user_id_user_id_fk",
           "tableFrom": "person",
@@ -263,6 +381,18 @@
           "primaryKey": true,
           "notNull": true
         },
+        "team_id": {
+          "name": "team_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "season_id": {
+          "name": "season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "varchar(100)",
@@ -274,12 +404,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "owner_user_id": {
-          "name": "owner_user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
         },
         "is_public": {
           "name": "is_public",
@@ -305,17 +429,17 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "locker_room_owner_user_id_user_id_fk": {
-          "name": "locker_room_owner_user_id_user_id_fk",
+        "locker_room_team_id_team_id_fk": {
+          "name": "locker_room_team_id_team_id_fk",
           "tableFrom": "locker_room",
-          "tableTo": "user",
+          "tableTo": "team",
           "columnsFrom": [
-            "owner_user_id"
+            "team_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -335,14 +459,20 @@
           "primaryKey": true,
           "notNull": true
         },
-        "locker_room_id": {
-          "name": "locker_room_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
         "league_id": {
           "name": "league_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_season_id": {
+          "name": "active_season_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sandbox_id": {
+          "name": "sandbox_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -406,13 +536,51 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sandbox": {
+      "name": "sandbox",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
       "foreignKeys": {
-        "team_locker_room_id_locker_room_id_fk": {
-          "name": "team_locker_room_id_locker_room_id_fk",
-          "tableFrom": "team",
-          "tableTo": "locker_room",
+        "sandbox_team_id_team_id_fk": {
+          "name": "sandbox_team_id_team_id_fk",
+          "tableFrom": "sandbox",
+          "tableTo": "team",
           "columnsFrom": [
-            "locker_room_id"
+            "team_id"
           ],
           "columnsTo": [
             "id"
@@ -437,6 +605,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "sandbox_id": {
+          "name": "sandbox_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "varchar(100)",
@@ -452,6 +626,12 @@
         "governing_body": {
           "name": "governing_body",
           "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active_season_id": {
+          "name": "active_season_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -581,8 +761,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "locker_room_id": {
-          "name": "locker_room_id",
+        "sandbox_id": {
+          "name": "sandbox_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -653,19 +833,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "location_locker_room_id_locker_room_id_fk": {
-          "name": "location_locker_room_id_locker_room_id_fk",
-          "tableFrom": "location",
-          "tableTo": "locker_room",
-          "columnsFrom": [
-            "locker_room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "location_home_team_id_team_id_fk": {
           "name": "location_home_team_id_team_id_fk",
           "tableFrom": "location",
@@ -738,55 +905,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.roster_role": {
-      "name": "roster_role",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "roster_role_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "roster_role_name_unique": {
-          "name": "roster_role_name_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.team_roster": {
-      "name": "team_roster",
+    "public.team_member": {
+      "name": "team_member",
       "schema": "",
       "columns": {
         "id": {
@@ -801,23 +921,31 @@
           "primaryKey": false,
           "notNull": true
         },
-        "season_id": {
-          "name": "season_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
         "person_id": {
           "name": "person_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "roster_role_id": {
-          "name": "roster_role_id",
+        "season_id": {
+          "name": "season_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "permission": {
+          "name": "permission",
+          "type": "team_permission",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'MEMBER'"
+        },
+        "team_role_id": {
+          "name": "team_role_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "position_id": {
           "name": "position_id",
@@ -831,22 +959,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "is_captain": {
-          "name": "is_captain",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "joined_at": {
-          "name": "joined_at",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "left_at": {
-          "name": "left_at",
-          "type": "date",
+        "title": {
+          "name": "title",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false
         },
@@ -874,9 +989,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "team_roster_team_id_team_id_fk": {
-          "name": "team_roster_team_id_team_id_fk",
-          "tableFrom": "team_roster",
+        "team_member_team_id_team_id_fk": {
+          "name": "team_member_team_id_team_id_fk",
+          "tableFrom": "team_member",
           "tableTo": "team",
           "columnsFrom": [
             "team_id"
@@ -887,22 +1002,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "team_roster_season_id_season_id_fk": {
-          "name": "team_roster_season_id_season_id_fk",
-          "tableFrom": "team_roster",
-          "tableTo": "season",
-          "columnsFrom": [
-            "season_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "team_roster_person_id_person_id_fk": {
-          "name": "team_roster_person_id_person_id_fk",
-          "tableFrom": "team_roster",
+        "team_member_person_id_person_id_fk": {
+          "name": "team_member_person_id_person_id_fk",
+          "tableFrom": "team_member",
           "tableTo": "person",
           "columnsFrom": [
             "person_id"
@@ -913,12 +1015,25 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "team_roster_roster_role_id_roster_role_id_fk": {
-          "name": "team_roster_roster_role_id_roster_role_id_fk",
-          "tableFrom": "team_roster",
-          "tableTo": "roster_role",
+        "team_member_season_id_season_id_fk": {
+          "name": "team_member_season_id_season_id_fk",
+          "tableFrom": "team_member",
+          "tableTo": "season",
           "columnsFrom": [
-            "roster_role_id"
+            "season_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "team_member_team_role_id_team_role_id_fk": {
+          "name": "team_member_team_role_id_team_role_id_fk",
+          "tableFrom": "team_member",
+          "tableTo": "team_role",
+          "columnsFrom": [
+            "team_role_id"
           ],
           "columnsTo": [
             "id"
@@ -926,9 +1041,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "team_roster_position_id_player_position_id_fk": {
-          "name": "team_roster_position_id_player_position_id_fk",
-          "tableFrom": "team_roster",
+        "team_member_position_id_player_position_id_fk": {
+          "name": "team_member_position_id_player_position_id_fk",
+          "tableFrom": "team_member",
           "tableTo": "player_position",
           "columnsFrom": [
             "position_id"
@@ -942,6 +1057,52 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.team_role": {
+      "name": "team_role",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "team_role_name_unique": {
+          "name": "team_role_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -964,6 +1125,12 @@
         },
         "location_id": {
           "name": "location_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sandbox_id": {
+          "name": "sandbox_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -1018,12 +1185,6 @@
         },
         "away_score": {
           "name": "away_score",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "referee_person_id": {
-          "name": "referee_person_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -1140,19 +1301,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "game_referee_person_id_person_id_fk": {
-          "name": "game_referee_person_id_person_id_fk",
-          "tableFrom": "game",
-          "tableTo": "person",
-          "columnsFrom": [
-            "referee_person_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1171,23 +1319,11 @@
           "primaryKey": true,
           "notNull": true
         },
-        "game_id": {
-          "name": "game_id",
+        "game_participant_id": {
+          "name": "game_participant_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
-        },
-        "team_id": {
-          "name": "team_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "person_id": {
-          "name": "person_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         },
         "event_type_id": {
           "name": "event_type_id",
@@ -1225,8 +1361,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "related_person_id": {
-          "name": "related_person_id",
+        "related_participant_id": {
+          "name": "related_participant_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -1234,43 +1370,17 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "game_event_game_id_game_id_fk": {
-          "name": "game_event_game_id_game_id_fk",
+        "game_event_game_participant_id_game_participant_id_fk": {
+          "name": "game_event_game_participant_id_game_participant_id_fk",
           "tableFrom": "game_event",
-          "tableTo": "game",
+          "tableTo": "game_participant",
           "columnsFrom": [
-            "game_id"
+            "game_participant_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "game_event_team_id_team_id_fk": {
-          "name": "game_event_team_id_team_id_fk",
-          "tableFrom": "game_event",
-          "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "game_event_person_id_person_id_fk": {
-          "name": "game_event_person_id_person_id_fk",
-          "tableFrom": "game_event",
-          "tableTo": "person",
-          "columnsFrom": [
-            "person_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "game_event_event_type_id_game_event_type_id_fk": {
@@ -1286,12 +1396,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "game_event_related_person_id_person_id_fk": {
-          "name": "game_event_related_person_id_person_id_fk",
+        "game_event_related_participant_id_game_participant_id_fk": {
+          "name": "game_event_related_participant_id_game_participant_id_fk",
           "tableFrom": "game_event",
-          "tableTo": "person",
+          "tableTo": "game_participant",
           "columnsFrom": [
-            "related_person_id"
+            "related_participant_id"
           ],
           "columnsTo": [
             "id"
@@ -1352,6 +1462,78 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.game_official": {
+      "name": "game_official",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "official_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "game_official_game_id_game_id_fk": {
+          "name": "game_official_game_id_game_id_fk",
+          "tableFrom": "game_official",
+          "tableTo": "game",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "game_official_person_id_person_id_fk": {
+          "name": "game_official_person_id_person_id_fk",
+          "tableFrom": "game_official",
+          "tableTo": "person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.game_participant": {
       "name": "game_participant",
       "schema": "",
@@ -1368,20 +1550,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "team_id": {
-          "name": "team_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "person_id": {
-          "name": "person_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "game_role_id": {
-          "name": "game_role_id",
+        "team_member_id": {
+          "name": "team_member_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -1392,8 +1562,21 @@
           "primaryKey": false,
           "notNull": false
         },
+        "jersey_number": {
+          "name": "jersey_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_starter": {
           "name": "is_starter",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_captain": {
+          "name": "is_captain",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -1428,38 +1611,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "game_participant_team_id_team_id_fk": {
-          "name": "game_participant_team_id_team_id_fk",
+        "game_participant_team_member_id_team_member_id_fk": {
+          "name": "game_participant_team_member_id_team_member_id_fk",
           "tableFrom": "game_participant",
-          "tableTo": "team",
+          "tableTo": "team_member",
           "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "game_participant_person_id_person_id_fk": {
-          "name": "game_participant_person_id_person_id_fk",
-          "tableFrom": "game_participant",
-          "tableTo": "person",
-          "columnsFrom": [
-            "person_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "game_participant_game_role_id_game_role_id_fk": {
-          "name": "game_participant_game_role_id_game_role_id_fk",
-          "tableFrom": "game_participant",
-          "tableTo": "game_role",
-          "columnsFrom": [
-            "game_role_id"
+            "team_member_id"
           ],
           "columnsTo": [
             "id"
@@ -1483,53 +1640,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.game_role": {
-      "name": "game_role",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "game_role_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "game_role_name_unique": {
-          "name": "game_role_name_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1785,27 +1895,22 @@
         "USER"
       ]
     },
-    "public.roster_role_type": {
-      "name": "roster_role_type",
+    "public.team_permission": {
+      "name": "team_permission",
       "schema": "public",
       "values": [
-        "OWNER",
-        "HEAD_COACH",
-        "COACH",
-        "MANAGER",
-        "PLAYER",
-        "PARENT"
+        "ADMIN",
+        "MEMBER",
+        "VIEWER"
       ]
     },
-    "public.game_role_type": {
-      "name": "game_role_type",
+    "public.official_role": {
+      "name": "official_role",
       "schema": "public",
       "values": [
-        "STARTER",
-        "SUBSTITUTE",
-        "COACH",
         "REFEREE",
-        "LINE_JUDGE"
+        "LINE_JUDGE",
+        "FOURTH_OFFICIAL"
       ]
     }
   },

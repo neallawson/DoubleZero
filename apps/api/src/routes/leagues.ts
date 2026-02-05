@@ -3,24 +3,49 @@ import { db } from '../db/index.js';
 import { league, season } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
+import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
 import { validate, CreateLeagueSchema, UpdateLeagueSchema, CreateSeasonSchema, UpdateSeasonSchema } from '../validation/index.js';
+import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
 
 // All routes require authentication
 router.use(requireAuth);
 
+// Helper to get sandbox entity context for a league
+async function getLeagueEntityContext(req: Request): Promise<SandboxEntityContext | null> {
+  const leagueId = parseInt(req.params.id ?? '', 10);
+  if (isNaN(leagueId)) return null;
+  
+  const [l] = await db
+    .select({ id: league.id, sandboxId: league.sandboxId })
+    .from(league)
+    .where(eq(league.id, leagueId))
+    .limit(1);
+  
+  if (!l) return null;
+  
+  // Leagues don't have a direct team association - only sandbox ownership matters
+  return {
+    sandboxId: l.sandboxId,
+    entityTeamId: null, // Public leagues require ADMIN
+  };
+}
+
 /**
  * GET /leagues - List all leagues
  * Access: Any authenticated user (read-only)
  */
-router.get('/', requireAuthenticated(), async (_req: Request, res: Response) => {
+router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
   try {
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
     const leagues = await db
       .select()
       .from(league)
-      .where(eq(league.isActive, true))
+      .where(and(
+        eq(league.isActive, true),
+        sandboxFilter(league.sandboxId, activeSandboxId)
+      ))
       .orderBy(league.name);
 
     res.json({ success: true, data: leagues });
@@ -47,10 +72,14 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
       });
     }
 
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
     const [found] = await db
       .select()
       .from(league)
-      .where(eq(league.id, id))
+      .where(and(
+        eq(league.id, id),
+        sandboxFilter(league.sandboxId, activeSandboxId)
+      ))
       .limit(1);
 
     if (!found) {
@@ -72,15 +101,22 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
 /**
  * POST /leagues - Create a league
- * Access: ADMIN only
+ * Access: ADMIN (creates public league) or TEAM_ADMIN with active team (creates sandboxed league)
  */
-router.post('/', requireAdmin(), validate(CreateLeagueSchema), async (req: Request, res: Response) => {
+router.post('/', requireAdminOrTeamAdmin(), validate(CreateLeagueSchema), async (req: Request, res: Response) => {
   try {
     const { name, description, governingBody } = req.body;
+    const activeTeamId = req.user!.activeTeamId;
+
+    // Determine sandboxId based on context
+    let sandboxId: number | null = null;
+    if (activeTeamId) {
+      sandboxId = await getOrCreateTeamSandbox(activeTeamId);
+    }
 
     const [created] = await db
       .insert(league)
-      .values({ name, description, governingBody })
+      .values({ name, description, governingBody, sandboxId })
       .returning();
 
     res.status(201).json({ success: true, data: created });
@@ -101,9 +137,9 @@ router.post('/', requireAdmin(), validate(CreateLeagueSchema), async (req: Reque
 
 /**
  * PATCH /leagues/:id - Update a league
- * Access: ADMIN only
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed leagues)
  */
-router.patch('/:id', requireAdmin(), validate(UpdateLeagueSchema), async (req: Request, res: Response) => {
+router.patch('/:id', requireSandboxOwnerPermission(getLeagueEntityContext), validate(UpdateLeagueSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {

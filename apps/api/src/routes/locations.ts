@@ -3,12 +3,33 @@ import { db } from '../db/index.js';
 import { location } from '../db/schema/index.js';
 import { eq, and, ilike } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
+import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
 import { validate, CreateLocationSchema, UpdateLocationSchema } from '../validation/index.js';
+import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
 
 router.use(requireAuth);
+
+// Helper to get sandbox entity context for a location
+async function getLocationEntityContext(req: Request): Promise<SandboxEntityContext | null> {
+  const locationId = parseInt(req.params.id ?? '', 10);
+  if (isNaN(locationId)) return null;
+  
+  const [l] = await db
+    .select({ id: location.id, sandboxId: location.sandboxId, homeTeamId: location.homeTeamId })
+    .from(location)
+    .where(eq(location.id, locationId))
+    .limit(1);
+  
+  if (!l) return null;
+  
+  // For locations: sandboxId determines ownership, entityTeamId is homeTeamId (for public locations with a home team)
+  return {
+    sandboxId: l.sandboxId,
+    entityTeamId: l.sandboxId === null ? l.homeTeamId : null,
+  };
+}
 
 /**
  * GET /locations - List all locations
@@ -17,10 +38,11 @@ router.use(requireAuth);
 router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
   try {
     const { search } = req.query;
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
     
-    let whereClause = eq(location.isActive, true);
+    let whereClause = and(eq(location.isActive, true), sandboxFilter(location.sandboxId, activeSandboxId))!;
     if (search && typeof search === 'string') {
-      whereClause = and(eq(location.isActive, true), ilike(location.name, `%${search}%`))!;
+      whereClause = and(whereClause, ilike(location.name, `%${search}%`))!;
     }
 
     const locations = await db.select().from(location).where(whereClause).orderBy(location.name);
@@ -42,7 +64,15 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
       return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid location ID' } });
     }
 
-    const [found] = await db.select().from(location).where(eq(location.id, id)).limit(1);
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
+    const [found] = await db
+      .select()
+      .from(location)
+      .where(and(
+        eq(location.id, id),
+        sandboxFilter(location.sandboxId, activeSandboxId)
+      ))
+      .limit(1);
     if (!found) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Location not found' } });
     }
@@ -56,14 +86,21 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
 /**
  * POST /locations - Create a location
- * Access: ADMIN only
+ * Access: ADMIN (creates public location) or TEAM_ADMIN with active team (creates sandboxed location)
  */
-router.post('/', requireAdmin(), validate(CreateLocationSchema), async (req: Request, res: Response) => {
+router.post('/', requireAdminOrTeamAdmin(), validate(CreateLocationSchema), async (req: Request, res: Response) => {
   try {
     const { name, address, city, state, zip, country, homeTeamId } = req.body;
+    const activeTeamId = req.user!.activeTeamId;
+
+    // Determine sandboxId based on context
+    let sandboxId: number | null = null;
+    if (activeTeamId) {
+      sandboxId = await getOrCreateTeamSandbox(activeTeamId);
+    }
 
     const [created] = await db.insert(location).values({ 
-      name, address, city, state, zip, country, homeTeamId 
+      name, address, city, state, zip, country, homeTeamId, sandboxId 
     }).returning();
 
     res.status(201).json({ success: true, data: created });
@@ -75,9 +112,9 @@ router.post('/', requireAdmin(), validate(CreateLocationSchema), async (req: Req
 
 /**
  * PATCH /locations/:id - Update a location
- * Access: ADMIN only
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed locations), or TEAM_ADMIN of home team (for public locations)
  */
-router.patch('/:id', requireAdmin(), validate(UpdateLocationSchema), async (req: Request, res: Response) => {
+router.patch('/:id', requireSandboxOwnerPermission(getLocationEntityContext), validate(UpdateLocationSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {

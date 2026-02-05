@@ -3,29 +3,40 @@ import { db } from '../db/index.js';
 import { teamMember, team, person, teamRole, playerPosition } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireTeamAdmin, requireTeamMember } from '../middleware/permissions.js';
+import { requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
 import { validate, CreateTeamMemberSchema, UpdateTeamMemberSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
 router.use(requireAuth);
 
-// Helper to get team context from request
-async function getTeamContext(req: Request): Promise<{ teamId: number; seasonId: number } | null> {
+// Helper to get sandbox entity context for team member operations
+// The team itself determines sandbox ownership
+async function getTeamEntityContext(req: Request): Promise<SandboxEntityContext | null> {
   const teamId = parseInt(req.params.teamId ?? '', 10);
   if (isNaN(teamId)) return null;
   
-  const [t] = await db.select({ activeSeasonId: team.activeSeasonId }).from(team).where(eq(team.id, teamId)).limit(1);
-  if (!t || !t.activeSeasonId) return null;
+  const [t] = await db
+    .select({ id: team.id, sandboxId: team.sandboxId })
+    .from(team)
+    .where(eq(team.id, teamId))
+    .limit(1);
   
-  return { teamId, seasonId: t.activeSeasonId };
+  if (!t) return null;
+  
+  // For team members: the team's sandboxId determines ownership
+  // entityTeamId is the team itself for public teams
+  return {
+    sandboxId: t.sandboxId,
+    entityTeamId: t.sandboxId === null ? t.id : null,
+  };
 }
 
 /**
  * GET /teams/:teamId/members - List team members for current season
- * Access: TEAM_MEMBER or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.get('/:teamId/members', requireTeamMember(getTeamContext), async (req: Request, res: Response) => {
+router.get('/:teamId/members', requireSandboxOwnerPermission(getTeamEntityContext), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     if (isNaN(teamId)) {
@@ -86,9 +97,9 @@ router.get('/:teamId/members', requireTeamMember(getTeamContext), async (req: Re
 
 /**
  * GET /teams/:teamId/members/:id - Get a single team member
- * Access: TEAM_MEMBER or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.get('/:teamId/members/:id', requireTeamMember(getTeamContext), async (req: Request, res: Response) => {
+router.get('/:teamId/members/:id', requireSandboxOwnerPermission(getTeamEntityContext), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     const id = parseInt(req.params.id ?? '', 10);
@@ -115,9 +126,9 @@ router.get('/:teamId/members/:id', requireTeamMember(getTeamContext), async (req
 
 /**
  * POST /teams/:teamId/members - Add a team member
- * Access: TEAM_ADMIN or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.post('/:teamId/members', requireTeamAdmin(getTeamContext), validate(CreateTeamMemberSchema), async (req: Request, res: Response) => {
+router.post('/:teamId/members', requireSandboxOwnerPermission(getTeamEntityContext), validate(CreateTeamMemberSchema), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     if (isNaN(teamId)) {
@@ -162,9 +173,9 @@ router.post('/:teamId/members', requireTeamAdmin(getTeamContext), validate(Creat
 
 /**
  * PATCH /teams/:teamId/members/:id - Update a team member
- * Access: TEAM_ADMIN or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.patch('/:teamId/members/:id', requireTeamAdmin(getTeamContext), validate(UpdateTeamMemberSchema), async (req: Request, res: Response) => {
+router.patch('/:teamId/members/:id', requireSandboxOwnerPermission(getTeamEntityContext), validate(UpdateTeamMemberSchema), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     const id = parseInt(req.params.id ?? '', 10);
@@ -211,9 +222,9 @@ router.patch('/:teamId/members/:id', requireTeamAdmin(getTeamContext), validate(
 
 /**
  * DELETE /teams/:teamId/members/:id - Remove a team member (soft delete)
- * Access: TEAM_ADMIN or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.delete('/:teamId/members/:id', requireTeamAdmin(getTeamContext), async (req: Request, res: Response) => {
+router.delete('/:teamId/members/:id', requireSandboxOwnerPermission(getTeamEntityContext), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     const id = parseInt(req.params.id ?? '', 10);

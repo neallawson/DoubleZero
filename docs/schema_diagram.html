@@ -54,7 +54,8 @@
   <div class="note">
     <strong>Permission Model:</strong> ADMIN (system) | TEAM_ADMIN | TEAM_MEMBER<br>
     <strong>Soft Delete:</strong> All entities use <code>isActive</code> boolean<br>
-    <strong>Optimistic Locking:</strong> All entities have <code>version</code> field
+    <strong>Optimistic Locking:</strong> All entities have <code>version</code> field<br>
+    <strong>Sandbox Model:</strong> Entities with <code>sandboxId</code> are private to the owning team. See <a href="21_sandbox_design.md">Sandbox Design Doc</a>
   </div>
 
   <h2>Entity Relationship Diagram</h2>
@@ -92,9 +93,18 @@ erDiagram
         timestamp createdAt
     }
 
+    %% ===== SANDBOX =====
+    sandbox {
+        int id PK
+        int teamId FK "owning team"
+        string name
+        timestamp createdAt
+    }
+
     %% ===== PERSON =====
     person {
         int id PK
+        int sandboxId FK "nullable"
         int userId FK "nullable, unique"
         string displayName
         string firstName
@@ -111,6 +121,7 @@ erDiagram
     %% ===== LEAGUE & SEASON =====
     league {
         int id PK
+        int sandboxId FK "nullable"
         string name "UK"
         string description
         string governingBody
@@ -136,6 +147,7 @@ erDiagram
         int id PK
         int leagueId FK "nullable"
         int activeSeasonId FK "nullable"
+        int sandboxId FK "nullable"
         string name
         string shortName
         string primaryColor
@@ -190,6 +202,7 @@ erDiagram
     %% ===== LOCATION =====
     location {
         int id PK
+        int sandboxId FK "nullable"
         string name
         string address
         string city
@@ -207,6 +220,7 @@ erDiagram
         int id PK
         int seasonId FK
         int locationId FK "nullable"
+        int sandboxId FK "nullable"
         int gameTypeId FK
         int statusId FK
         date date
@@ -318,6 +332,14 @@ erDiagram
     user ||--o| person : "linked to"
     session ||--o| user_session_state : has
     user_session_state }o--|| team : activeTeam
+    
+    %% Sandbox ownership and containment
+    sandbox }o--|| team : ownedBy
+    sandbox ||--o{ team : containsTeams
+    sandbox ||--o{ game : containsGames
+    sandbox ||--o{ league : containsLeagues
+    sandbox ||--o{ location : containsLocations
+    sandbox ||--o{ person : containsPersons
     
     league ||--o{ season : contains
     league }o--o| season : activeSeason

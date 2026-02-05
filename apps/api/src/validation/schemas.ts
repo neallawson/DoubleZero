@@ -110,7 +110,6 @@ export const UpdateLeagueSchema = z.object({
 // Season schemas
 export const CreateSeasonSchema = z.object({
   name: requiredString(100),
-  leagueId: positiveInt,
   startDate: dateString,
   endDate: dateString,
 });

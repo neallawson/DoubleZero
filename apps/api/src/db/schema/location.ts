@@ -5,6 +5,7 @@ import { team } from './team';
 // Location table - physical places (fields, stadiums)
 export const location = pgTable('location', {
   id: serial('id').primaryKey(),
+  sandboxId: integer('sandbox_id'), // FK added in sandbox.ts - if set, location is private to owning sandbox
   name: varchar('name', { length: 100 }).notNull(),
   address: varchar('address', { length: 200 }),
   city: varchar('city', { length: 100 }),

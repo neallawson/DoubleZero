@@ -6,6 +6,7 @@ export const team = pgTable('team', {
   id: serial('id').primaryKey(),
   leagueId: integer('league_id'), // FK added in league.ts
   activeSeasonId: integer('active_season_id'), // FK added in league.ts - team's working season
+  sandboxId: integer('sandbox_id'), // FK added in sandbox.ts - if set, team is private to owning sandbox
   name: varchar('name', { length: 100 }).notNull(),
   shortName: varchar('short_name', { length: 20 }),
   primaryColor: varchar('primary_color', { length: 20 }),

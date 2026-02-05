@@ -1,0 +1,210 @@
+Migration needed:
+For the  migration, I want to add a single field to the game and team tables: 'owningTeamId'.
+This is the id of the team that "created" this new team. Specifically, this is the active team of the person who creates
+the new team. We link it to a team, not a user, because users/persons can come-and-go, but the team stays, we hope.
+
+Anyone with team_admin privileges for the owning team also has team_admin privileges on any other team where:
+- user's "active team" is the same as the "owning team id"
+- user has team admin privileges on the owning team.
+- this admin privilege "inheritance" only works for a depth of 1. As an example, if user A is a member of Team A with team admin privileges
+on Team A, and user A creates Team B, user A will have team admin privileges on Team B, so long as Team B's "owning team id" is Team A's id.
+However, if user B is a member of Team B with team admin privileges on Team B, and user B creates Team C, owned by Team B, then user A will not
+have team admin privileges on Team C. And, of course, user B will not have team admin privileges on Team A but will on Team C.
+
+
+Prompt: "Continuing work on DoubleZero. Consult stored memories, the previous thread, code and documentation in /docs (particularly implementation_plan)
+for history. We have an app with most of the domain CRUD in place, both API and Vite-React front end. It's responsive on the front, mostly. No styling
+but ok for now. The app captures most of the basic info we need to build teams and games, and this serves as a starting but necessary point for the
+real functionality that we will begin to implement next. To that end, I would like your help to create a new plan for "Phase 2" of this application.
+In this phase, we will build the key components for actual management and analysis - the Playboard Composer, the Calendar, the discussion forum, the
+Team and personal timeline-based "walls", etc. Each of these components will need discussion and planning before implementation to ensure we have a
+well-defined scope and sufficient details for successful implementation, so we will develop these interactively (you and me), in well-defined stages.
+
+<finish prompt>"
+
+Testing: I don't see a way to add a location to a team as a "home field." I also see the FK is in the location table which I don't like. To me a team "has a" home field that is one location. So I think a team.homeFieldId -> location.id is a better design.
+What do you think?
+
+I'd like to add a "create roster/lineup" screen that helps a coach populate all of the game_participants for a given team on one screen.
+To access this new screen, there will be a button on the "New Game / Edit Game" screen under each of the two team select boxes.
+The buttons are disabled until the record is saved (we'll need that game id). Clicking on the button for a given team does the following:
+
+- brings up a screen that is a table of all the players on that team, one player per row. Each player has a select box for their position.
+ For players with a default position (teamMember.postitionId), the select box defaults to that position. To the right of the select box
+ is a checkbox for whether or not this player will be on this game's roster. By default, all the checkboxes are checked. Unchecking a player
+ will remove them from this game's roster when saved. When saved, we have all of our player/positions to create the game_participants for
+ this team and game.
+
+ The coach creating/editing the game can then click on the "Create roster" button underneath the other team and perform the same actions 
+ on their members to set the roster for that team.
+
+ This suggests that we need an "owner" for the game record. The owner is the team that created the game, and TEAM_ADMIN users for that team can
+ edit the game including the rosters for both teams.
+
+
+<<<<< BRAINSTORMING SESSION: These ideas are "concepts under development" that need more discussion. The ideas presented here
+ARE NOT IMPLEMENTATION-READY at this time. >>>>>
+
+  Thoughts on the interactive soccer field - PlayBoard.
+  - The "Playboard Composor" is an interactive editor used to compose scenarios on the field.
+  - The Playboard Composer creates entites called "Plays" that are saved to the database.
+  - The Playboard Composor has a "View" or "Run" mode that is an interactive viewer used to view
+  saved and composed scenarios on the field.
+  - The Playboard Composor has a "Create" mode that is an interactive editor used to create
+  new scenarios on the field.
+  - top down and oblique views of the field.
+  - green field with proper white lines in the correct locations.
+  - players are team-colored icons with visible number. Touching/holding a player will pop up a small card with the player's name and position.
+  - players can be dragged and dropped around the field to new positions.
+  - To keep the positions accuracate on multiple devices, we will define a world coordinates system for the field
+  and map that field to the screen viewport. Coordinates will be represented in world coordinates (meters). This is just like a video game.
+  - The user will have the ability to zoom in using pinch to zoom and pan using their finger. This should be supported in the web app/browser.
+  - The user will at any time be able to "snapshot" the field at that moment. This snapshot creates a "snapshot" record in the database that
+  records each player on the field and their position in world coordinates. Other things might be added to this record in the future, 
+  but at a minimum we will capture all players and their positions. The snapshot can be quickly named and saved as a child of the main
+  playboard composition record. We'll want a camera/snapshot icon to create a snapshot. A shapshot name is auto assigned (date/timestamp), and
+  the user can choose to override and edit the name. Most of the time, I expect the user to accept the auto-assigned name and allow the snapshot to quickly
+  save with no further UI action.
+  - The Composer will have a slider to distinguish between compositions that are static (drawings with annotations, etc.) versus
+  dynamic (animated players following paths over time).
+  - In dynamic/animation mode, the user will add a player to the field (or select one), hold them down for a "path" icon, then drag to create the path
+  that the player will follow over the time.
+  - The time is set by a slider, and can be changed on replay, etc.
+  - In the same way, the user can add multiple players to the field and animate them in the same animation.
+  - At any time, the user can select "Preview" to see the animation in action. They can then continue adding or editing it.
+
+
+Data model and coordinates:
+-Use normalized tables so compositions and snapshots are flexible and composable:
+-Plays have an owner (who?)
+-Plays can be edited and updated and eventually shared with the team.
+-Plays have a name, description, and tags.
+-Plays can be saved to a team (or user's library).
+-Plays can be static "drawings" or short "animations" of players following paths on the field over a set time
+to demonstrate a play or strategy.
+
+- playboard_snapshot(id, game_id, name, created_at, field_orientation, zoom, pan_x, pan_y, notes, tags[]).
+- playboard_snapshot_player(snapshot_id, player_id, x_meters, y_meters, role_override, is_active, PRIMARY KEY (snapshot_id, player_id)).
+- playboard_layer(id, snapshot_id, type, payload_jsonb, z_index) for drawings, cones, arrows, etc.
+
+Some notes:
+- Store world coordinates in meters with origin at one corner or the center; store field dimensions in a field_template table so different 
+pitch sizes and age groups are supported.
+- Distinguish logical formation vs. one specific snapshot: formation(id, team_id, name) plus formation_position(formation_id, role, x_meters, y_meters);
+snapshots then reference a formation and override specific coordinates.
+
+Richer coaching features
+Drawing layer:
+- Freehand and straight lines, arrows for runs and passes, dashed vs solid (e.g., sprint vs jog).
+- Circles/rectangles to highlight zones.
+​- Store as vector objects (in playboard_layer) so they’re editable, not screenshots.
+
+Equipment:
+- Cones, small goals, mannequins, ladders, etc., to design drills; again, store as typed objects with coordinates.
+
+Different board modes:
+- Full pitch, attacking third only, set‑piece corner view, training ground layout.
+- Each mode can be a field_template with its own coordinate mapping.
+
+Configurable players:
+- Name, number, role, maybe photo/icon so coaches can quickly see who’s who. I like a team-colored icon with the number and name
+where a hold on the icon pops up a small card with more info.
+- Ability to add/remove temporary “dummy” players (e.g., spare defender cone).
+
+Snapshots, versions, and reuse
+-snapshots are first‑class concepts with history and reuse.
+-snapshots are linked to the paren playboard composition, if one was saved 
+
+Versioning:
+- playboard_snapshot can have parent_snapshot_id and version so a coach can duplicate and tweak “4‑3‑3 high press v1 → v2”.
+
+Tagging and organization:
+- Text tags[] on snapshots: e.g., ["corner", "defensive", "u12"], and a free‑text notes field for coaching points.
+
+Reusable libraries:
+- Allow playboard compositions andsnapshots to be attached to a game, if relevant. They can always be stored (by default)
+in the user's and team's playboard library so they can be reused across matches or training sessions.
+
+Folders / categories: “Build‑up patterns”, “Pressing triggers”, “Set pieces”.
+
+Export/sharing:
+
+Server‑side or client‑side render to PNG/PDF for sharing/printing.
+
+Store exported media URLs linked back to snapshot id.
+
+Interaction, multi‑device, and collaboration
+You already have drag/drop, zoom, pan. To harden this for real‑world usage:
+
+Device‑agnostic view:
+
+Persist camera/viewport per snapshot: zoom level, pan, orientation (which side is “up”), maybe per user.
+
+Use the world coordinate system exclusively in the DB; all “fit to screen” logic stays client‑side.
+
+Real‑time collaboration (stretch goal):
+
+WebSocket channel keyed by snapshot_id or game_id.
+
+Client sends small patches: {player_id, x_meters, y_meters, updated_at}; server applies with optimistic locking.
+
+Write a last_modified_at and last_modified_by onto snapshots for conflict detection.
+
+Offline‑first:
+
+Local cache of snapshots; queue mutations with pending_sync flag and reconcile with server; the world coordinate system makes merging simpler.
+
+UX considerations and extras
+Things that dramatically improve coaching usability:
+
+Undo/redo stack for moves and drawings (store operations client‑side; persist only the final state on explicit save, or maintain operation log in a playboard_event table if you want full history).
+
+Animation:
+
+Multiple “frames” under one play: playboard_sequence(id, name) + playboard_sequence_frame(sequence_id, index, snapshot_id) to step through a movement.
+
+Role‑aware snapping:
+
+Optional grid or “role slots” for common formations; when you drag a player close to a slot, it snaps there, making it easier to keep shape clean.
+
+Access control:
+
+playboard_snapshot_acl(snapshot_id, user_id, can_edit) so assistants can propose plays, players can only view, etc.
+​
+
+Put together, you’d have:
+
+A game‑engine‑style 2D tactical board using world coordinates and view transforms.
+
+A normalized Postgres schema that treats snapshots, drawings, and sequences as composable data rather than one‑off blobs.
+
+Coach‑friendly features (drills, annotations, exports, sharing, versioning) that match what dedicated tactical‑board products offer.
+
+
+
+Item Sharing/Linking Concepts:
+- The goal is to make most items that can be created and saved in the app shareable to individuals,
+a team, or the public.
+- We need some kind of "share table" that is a robust link table for different items to be shared/linked
+to different entities (users, teams, public) through a variety of tools (email, discussion forum, calendar, etc)
+with different permissions (view, edit, etc) and scope (public, team, individual).
+- To facilitate this, we need to have owner/team FKs on created items.
+
+
+Locker room tools:
+- Team calendar.
+- Team forum/discussion board for sharing posts, articles, photos, links to videos,etc.
+- Team photo album.
+- Team document library.
+- Team playboard library.
+
+- All entities and their data (documents, photos, videos except links, etc.) should be stored in the database.
+
+- The top of the locker room should be an area for sticky notices and announcements, some generated automatically by
+the calendar, for example.
+
+All of the entities created in these tools should be shareable as already described.
+
+Player locker room tools:
+- Same tools as the locker room, but only for the player who can share with their team and the public.
+

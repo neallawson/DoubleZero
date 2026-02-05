@@ -3,31 +3,50 @@ import { db } from '../db/index.js';
 import { team, lockerRoom } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireAdmin, requireAuthenticated, requireTeamAdmin, requireTeamMember } from '../middleware/permissions.js';
+import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
 import { validate, CreateTeamSchema, UpdateTeamSchema } from '../validation/index.js';
+import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
+import { sandbox } from '../db/schema/sandbox.js';
 
 const router: RouterType = Router();
 
 router.use(requireAuth);
 
-// Helper to get team context from request
-async function getTeamContext(req: Request): Promise<{ teamId: number; seasonId: number } | null> {
+// Helper to get sandbox entity context for a team (handles both :id and :teamId params)
+async function getTeamEntityContext(req: Request): Promise<SandboxEntityContext | null> {
   const teamId = parseInt(req.params.id ?? req.params.teamId ?? '', 10);
   if (isNaN(teamId)) return null;
   
-  const [t] = await db.select({ activeSeasonId: team.activeSeasonId }).from(team).where(eq(team.id, teamId)).limit(1);
-  if (!t || !t.activeSeasonId) return null;
+  const [t] = await db
+    .select({ id: team.id, sandboxId: team.sandboxId })
+    .from(team)
+    .where(eq(team.id, teamId))
+    .limit(1);
   
-  return { teamId, seasonId: t.activeSeasonId };
+  if (!t) return null;
+  
+  // For teams: sandboxId determines ownership, entityTeamId is the team itself (for public teams)
+  return {
+    sandboxId: t.sandboxId,
+    entityTeamId: t.sandboxId === null ? t.id : null,
+  };
 }
 
 /**
  * GET /teams - List all teams
  * Access: Any authenticated user
  */
-router.get('/', requireAuthenticated(), async (_req: Request, res: Response) => {
+router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
   try {
-    const teams = await db.select().from(team).where(eq(team.isActive, true)).orderBy(team.name);
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
+    const teams = await db
+      .select()
+      .from(team)
+      .where(and(
+        eq(team.isActive, true),
+        sandboxFilter(team.sandboxId, activeSandboxId)
+      ))
+      .orderBy(team.name);
     res.json({ success: true, data: teams });
   } catch (error) {
     console.error('Error fetching teams:', error);
@@ -46,7 +65,15 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
       return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid team ID' } });
     }
 
-    const [found] = await db.select().from(team).where(eq(team.id, id)).limit(1);
+    const activeSandboxId = await getActiveSandboxId(req.user!.activeTeamId);
+    const [found] = await db
+      .select()
+      .from(team)
+      .where(and(
+        eq(team.id, id),
+        sandboxFilter(team.sandboxId, activeSandboxId)
+      ))
+      .limit(1);
     if (!found) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Team not found' } });
     }
@@ -60,13 +87,32 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
 /**
  * POST /teams - Create a team
- * Access: ADMIN only
+ * Access: ADMIN (creates public team) or TEAM_ADMIN with active team (creates sandboxed team)
  */
-router.post('/', requireAdmin(), validate(CreateTeamSchema), async (req: Request, res: Response) => {
+router.post('/', requireAdminOrTeamAdmin(), validate(CreateTeamSchema), async (req: Request, res: Response) => {
   try {
-    const { name, shortName, leagueId, primaryColor, secondaryColor } = req.body;
+    const { name, shortName, leagueId, activeSeasonId, primaryColor, secondaryColor } = req.body;
+    const activeTeamId = req.user!.activeTeamId;
 
-    const [created] = await db.insert(team).values({ name, shortName, leagueId, primaryColor, secondaryColor }).returning();
+    // Determine sandboxId based on context
+    let sandboxId: number | null = null;
+    if (activeTeamId) {
+      // Team admin creating sandboxed team
+      sandboxId = await getOrCreateTeamSandbox(activeTeamId);
+    }
+
+    const [created] = await db.insert(team).values({ 
+      name, shortName, leagueId, activeSeasonId, primaryColor, secondaryColor, sandboxId 
+    }).returning();
+
+    // If ADMIN created a public team (no activeTeamId), auto-create its sandbox
+    if (!activeTeamId && created) {
+      await db.insert(sandbox).values({
+        teamId: created.id,
+        name: `${name} Sandbox`,
+      });
+    }
+
     res.status(201).json({ success: true, data: created });
   } catch (error) {
     console.error('Error creating team:', error);
@@ -76,9 +122,9 @@ router.post('/', requireAdmin(), validate(CreateTeamSchema), async (req: Request
 
 /**
  * PATCH /teams/:id - Update a team
- * Access: ADMIN or TEAM_ADMIN
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.patch('/:id', requireTeamAdmin(getTeamContext), validate(UpdateTeamSchema), async (req: Request, res: Response) => {
+router.patch('/:id', requireSandboxOwnerPermission(getTeamEntityContext), validate(UpdateTeamSchema), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id ?? '', 10);
     if (isNaN(id)) {
@@ -139,9 +185,9 @@ router.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
 /**
  * GET /teams/:teamId/locker-rooms - List locker rooms for a team
- * Access: TEAM_MEMBER or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.get('/:teamId/locker-rooms', requireTeamMember(getTeamContext), async (req: Request, res: Response) => {
+router.get('/:teamId/locker-rooms', requireSandboxOwnerPermission(getTeamEntityContext), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     if (isNaN(teamId)) {
@@ -158,9 +204,9 @@ router.get('/:teamId/locker-rooms', requireTeamMember(getTeamContext), async (re
 
 /**
  * POST /teams/:teamId/locker-rooms - Create a locker room
- * Access: TEAM_ADMIN or higher
+ * Access: ADMIN, or TEAM_ADMIN of sandbox owner (for sandboxed teams), or TEAM_ADMIN of the team (for public teams)
  */
-router.post('/:teamId/locker-rooms', requireTeamAdmin(getTeamContext), async (req: Request, res: Response) => {
+router.post('/:teamId/locker-rooms', requireSandboxOwnerPermission(getTeamEntityContext), async (req: Request, res: Response) => {
   try {
     const teamId = parseInt(req.params.teamId ?? '', 10);
     if (isNaN(teamId)) {

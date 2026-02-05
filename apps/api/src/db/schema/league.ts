@@ -5,6 +5,7 @@ import { team, lockerRoom } from './team';
 // League table
 export const league = pgTable('league', {
   id: serial('id').primaryKey(),
+  sandboxId: integer('sandbox_id'), // FK added in sandbox.ts - if set, league is private to owning sandbox
   name: varchar('name', { length: 100 }).notNull().unique(),
   description: text('description'),
   governingBody: varchar('governing_body', { length: 100 }),
