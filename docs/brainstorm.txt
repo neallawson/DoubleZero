@@ -22,6 +22,11 @@ well-defined scope and sufficient details for successful implementation, so we w
 
 <finish prompt>"
 
+STARTING THE APP:
+
+1. Start the API first: pnpm --filter @doublezero/api dev
+2. Then start the web app: pnpm --filter web dev
+
 Testing: I don't see a way to add a location to a team as a "home field." I also see the FK is in the location table which I don't like. To me a team "has a" home field that is one location. So I think a team.homeFieldId -> location.id is a better design.
 What do you think?
 
