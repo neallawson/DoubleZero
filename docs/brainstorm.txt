@@ -1,26 +1,29 @@
-Migration needed:
-For the  migration, I want to add a single field to the game and team tables: 'owningTeamId'.
-This is the id of the team that "created" this new team. Specifically, this is the active team of the person who creates
-the new team. We link it to a team, not a user, because users/persons can come-and-go, but the team stays, we hope.
-
-Anyone with team_admin privileges for the owning team also has team_admin privileges on any other team where:
-- user's "active team" is the same as the "owning team id"
-- user has team admin privileges on the owning team.
-- this admin privilege "inheritance" only works for a depth of 1. As an example, if user A is a member of Team A with team admin privileges
-on Team A, and user A creates Team B, user A will have team admin privileges on Team B, so long as Team B's "owning team id" is Team A's id.
-However, if user B is a member of Team B with team admin privileges on Team B, and user B creates Team C, owned by Team B, then user A will not
-have team admin privileges on Team C. And, of course, user B will not have team admin privileges on Team A but will on Team C.
-
-
-Prompt: "Continuing work on DoubleZero. Consult stored memories, the previous thread, code and documentation in /docs (particularly implementation_plan)
-for history. We have an app with most of the domain CRUD in place, both API and Vite-React front end. It's responsive on the front, mostly. No styling
-but ok for now. The app captures most of the basic info we need to build teams and games, and this serves as a starting but necessary point for the
-real functionality that we will begin to implement next. To that end, I would like your help to create a new plan for "Phase 2" of this application.
+Prompt: "Continuing work on DoubleZero. Consult the code and documentation in /docs (particularly implementation_plan) noting that the db design in
+Chapter 3 is out-of-date and not current, and we're not using Better-Auth. See the 'schema_diagram.html' for the current database structure. Skip
+the 'brainstorm' document as it has lots of speculation and ideas that might never be developed and could be confusing to mix in with concrete ideas. 
+We have an app with most of the domain CRUD in place, both API and Vite-React front end. It's responsive on the front, mostly. No styling but ok for now.
+The app captures most of the basic info we need to build teams and games, and this serves as a starting but necessary point for the real functionality
+that we will begin to implement next. To that end, I would like your help to create a new plan for "Phase 2" of this application.
 In this phase, we will build the key components for actual management and analysis - the Playboard Composer, the Calendar, the discussion forum, the
 Team and personal timeline-based "walls", etc. Each of these components will need discussion and planning before implementation to ensure we have a
-well-defined scope and sufficient details for successful implementation, so we will develop these interactively (you and me), in well-defined stages.
+well-defined scope and sufficient details for successful implementation, so we will develop these in well-defined stages that can be tested and "signed-off"
+before continuing.
 
 <finish prompt>"
+
+---------
+Continuing work on DoubleZero. Consult the code as the master reference. There is documentation in /docs (particularly implementation_plan) that is more-or-less
+accurate, but note that the db design in Chapter 3 is out-of-date and not current, and we're not using Better-Auth. See the 'schema_diagram.html' for the current 
+database structure. Skip the 'brainstorm' document as it has lots of speculation and ideas that might never be developed and could be confusing to mix in with 
+concrete ideas.  We have an app with most of the domain CRUD in place, both API and Vite-React front end. It's responsive on the front, mostly. No styling but 
+ok for now.
+The app captures most of the basic info we need to build teams and games, and this serves as a starting but necessary point for the real functionality
+that we will begin to implement next. To that end, I would like your help to create a new plan for "Phase 2" of this application.
+In this phase, we will build the key components for actual management and analysis - the Playboard Composer, the Calendar, the discussion forum, the
+Team and personal timeline-based "walls", etc. Each of these components will need discussion and planning before implementation to ensure we have a
+well-defined scope and sufficient details for successful implementation, so we will develop these in well-defined stages that can be tested and "signed-off"
+before continuing.
+---------
 
 STARTING THE APP:
 
@@ -57,16 +60,16 @@ ARE NOT IMPLEMENTATION-READY at this time. >>>>>
   saved and composed scenarios on the field.
   - The Playboard Composor has a "Create" mode that is an interactive editor used to create
   new scenarios on the field.
-  - top down and oblique views of the field.
-  - green field with proper white lines in the correct locations.
+  - top down and oblique views of the field - ability to tilt and rotate field will help especially with mobile.
+  - green field with proper white lines (or correct colors) in the correct locations.
   - players are team-colored icons with visible number. Touching/holding a player will pop up a small card with the player's name and position.
   - players can be dragged and dropped around the field to new positions.
   - To keep the positions accuracate on multiple devices, we will define a world coordinates system for the field
   and map that field to the screen viewport. Coordinates will be represented in world coordinates (meters). This is just like a video game.
   - The user will have the ability to zoom in using pinch to zoom and pan using their finger. This should be supported in the web app/browser.
   - The user will at any time be able to "snapshot" the field at that moment. This snapshot creates a "snapshot" record in the database that
-  records each player on the field and their position in world coordinates. Other things might be added to this record in the future, 
-  but at a minimum we will capture all players and their positions. The snapshot can be quickly named and saved as a child of the main
+  records each player on the field and their position in world coordinates. At a minimum we will capture all players and their positions,
+  but we should plan the db structure to capture all anotations and other elements as well. The snapshot can be quickly named and saved as a child of the main
   playboard composition record. We'll want a camera/snapshot icon to create a snapshot. A shapshot name is auto assigned (date/timestamp), and
   the user can choose to override and edit the name. Most of the time, I expect the user to accept the auto-assigned name and allow the snapshot to quickly
   save with no further UI action.
@@ -81,28 +84,32 @@ ARE NOT IMPLEMENTATION-READY at this time. >>>>>
 
 Data model and coordinates:
 -Use normalized tables so compositions and snapshots are flexible and composable:
--Plays have an owner (who?)
+-Plays have an owner (user who created them)
+-Should capture creating timestamp as part of the database record for view sorting by creation time.
 -Plays can be edited and updated and eventually shared with the team.
 -Plays have a name, description, and tags.
--Plays can be saved to a team (or user's library).
+-Plays are saved in the database with a structure simulating file system "folders" for organization by the user.
+-Plays are shareable entities that can be shared to a team's locker room (forum), public wall, etc. 
 -Plays can be static "drawings" or short "animations" of players following paths on the field over a set time
 to demonstrate a play or strategy.
 
+Some thoughts on design. Note, these are just ideas not set-in-stone requests:
 - playboard_snapshot(id, game_id, name, created_at, field_orientation, zoom, pan_x, pan_y, notes, tags[]).
 - playboard_snapshot_player(snapshot_id, player_id, x_meters, y_meters, role_override, is_active, PRIMARY KEY (snapshot_id, player_id)).
 - playboard_layer(id, snapshot_id, type, payload_jsonb, z_index) for drawings, cones, arrows, etc.
 
 Some notes:
-- Store world coordinates in meters with origin at one corner or the center; store field dimensions in a field_template table so different 
+- Store world coordinates in meters with origin at one corner or the center;
+- store field dimensions in a field_template table so different 
 pitch sizes and age groups are supported.
 - Distinguish logical formation vs. one specific snapshot: formation(id, team_id, name) plus formation_position(formation_id, role, x_meters, y_meters);
 snapshots then reference a formation and override specific coordinates.
 
-Richer coaching features
+Rich anotation features
 Drawing layer:
 - Freehand and straight lines, arrows for runs and passes, dashed vs solid (e.g., sprint vs jog).
 - Circles/rectangles to highlight zones.
-​- Store as vector objects (in playboard_layer) so they’re editable, not screenshots.
+- Store as vector objects (in playboard_layer) so they’re editable, not screenshots.
 
 Equipment:
 - Cones, small goals, mannequins, ladders, etc., to design drills; again, store as typed objects with coordinates.
@@ -114,7 +121,7 @@ Different board modes:
 Configurable players:
 - Name, number, role, maybe photo/icon so coaches can quickly see who’s who. I like a team-colored icon with the number and name
 where a hold on the icon pops up a small card with more info.
-- Ability to add/remove temporary “dummy” players (e.g., spare defender cone).
+- Easily add/remove players from the field and edit those on it.
 
 Snapshots, versions, and reuse
 -snapshots are first‑class concepts with history and reuse.
@@ -127,37 +134,27 @@ Tagging and organization:
 - Text tags[] on snapshots: e.g., ["corner", "defensive", "u12"], and a free‑text notes field for coaching points.
 
 Reusable libraries:
-- Allow playboard compositions andsnapshots to be attached to a game, if relevant. They can always be stored (by default)
-in the user's and team's playboard library so they can be reused across matches or training sessions.
+- Allow playboard compositions("plays") and snapshots to be attached to a game, if relevant. By default, they are stored 
+in the user's playboard ("Plays") library so they can be shared whenever desired.
 
-Folders / categories: “Build‑up patterns”, “Pressing triggers”, “Set pieces”.
 
 Export/sharing:
+- Server‑side or client‑side render to PNG/PDF for sharing/printing.
+- Sharable item: link to the resource can be shared by user in a team locker room, message from messaging system,
+team calendar, discussion forum, etc.
+- We need an icon to represent this type of sharable resource. Probably looks like a play drawn up on a board.
 
-Server‑side or client‑side render to PNG/PDF for sharing/printing.
-
-Store exported media URLs linked back to snapshot id.
-
-Interaction, multi‑device, and collaboration
-You already have drag/drop, zoom, pan. To harden this for real‑world usage:
+Interaction, multi‑device, and collaboration:
+- You already have drag/drop, zoom, pan, tilt. To harden this for real‑world usage:
 
 Device‑agnostic view:
+- Persist camera/viewport per snapshot: zoom level, pan, orientation (which side is “up”), maybe per user.
+- Use the world coordinate system exclusively in the DB; all “fit to screen” logic stays client‑side.
 
-Persist camera/viewport per snapshot: zoom level, pan, orientation (which side is “up”), maybe per user.
-
-Use the world coordinate system exclusively in the DB; all “fit to screen” logic stays client‑side.
-
-Real‑time collaboration (stretch goal):
-
-WebSocket channel keyed by snapshot_id or game_id.
-
-Client sends small patches: {player_id, x_meters, y_meters, updated_at}; server applies with optimistic locking.
-
-Write a last_modified_at and last_modified_by onto snapshots for conflict detection.
-
-Offline‑first:
-
-Local cache of snapshots; queue mutations with pending_sync flag and reconcile with server; the world coordinate system makes merging simpler.
+Offline‑first: THIS FEATURE IS IMPORTANT. The coach/user must have the ability to compose plays and "save them" locally on their device
+so that they can be stored in the db later in case an Internet connection isn't available at the time the feature is needed.
+- Local cache/queue of composed plays and snapshots; queue mutations with pending_sync flag and reconcile with server; the world
+coordinate system makes merging simpler.
 
 UX considerations and extras
 Things that dramatically improve coaching usability:
@@ -175,7 +172,6 @@ Optional grid or “role slots” for common formations; when you drag a player 
 Access control:
 
 playboard_snapshot_acl(snapshot_id, user_id, can_edit) so assistants can propose plays, players can only view, etc.
-​
 
 Put together, you’d have:
 

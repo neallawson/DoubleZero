@@ -6,6 +6,8 @@ import { LockerRoomPage } from '@/pages/LockerRoomPage';
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { TeamSelectPage } from '@/pages/TeamSelectPage';
+import { PlayboardPage } from '@/pages/PlayboardPage';
+import { PlaysListPage } from '@/pages/PlaysListPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -59,6 +61,23 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Playboard has its own full-screen layout, separate from AppLayout */}
+      <Route
+        path="/playboard"
+        element={
+          <ProtectedRoute>
+            <PlayboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/playboard/:id"
+        element={
+          <ProtectedRoute>
+            <PlayboardPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/"
         element={
@@ -70,6 +89,7 @@ function AppRoutes() {
         <Route index element={<HomeRedirect />} />
         <Route path="admin" element={<AdminDashboardPage />} />
         <Route path="locker-room" element={<LockerRoomPage />} />
+        <Route path="plays" element={<PlaysListPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="select-team" element={<TeamSelectPage />} />
       </Route>

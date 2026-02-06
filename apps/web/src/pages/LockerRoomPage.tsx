@@ -1,9 +1,11 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export function LockerRoomPage() {
   const { user, activeTeam } = useAuth();
+  const navigate = useNavigate();
 
   // If somehow no active team (e.g., not on any team), redirect to profile
   if (!activeTeam) {
@@ -54,6 +56,26 @@ export function LockerRoomPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground text-center py-4">Coming soon...</p>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2 lg:col-span-1">
+          <CardHeader>
+            <CardTitle>Playbook</CardTitle>
+            <CardDescription>Tactical plays and formations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Create and manage tactical diagrams for your team.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={() => navigate('/playboard')}>
+                New Play
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/plays')}>
+                View All Plays
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

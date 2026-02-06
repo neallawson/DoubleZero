@@ -1,0 +1,65 @@
+Neal's corrections to the following report:
+Leave the original plan text in place, but add an update directly adjacent so it's clear to the reader where the divergence took place.
+Definitely update the data model, but don't mention "sandbox replacing locker room" - you're confusing the implemented sandbox with
+the locker room feature that hasn't been implemented yet. For the locker room, simply refer to it as "not implemented" as you're already
+correctly doing elsewhere.
+
+--------------------
+Documentation vs Implementation Divergence Report
+Summary
+After reviewing the numbered .md files against the actual codebase, here are the significant divergences:
+
+01_tech_stack.md - NEEDS UPDATE
+Documented	Actual Implementation
+Web: Next.js 14+ (App Router)	Vite + React (no Next.js)
+Mobile: React Native with Expo	Not implemented yet
+Shared doublezero/schema package	Schemas live in apps/api/src/validation/schemas.ts
+Recommendation: Update to reflect Vite+React for web, note mobile is deferred.
+
+03_data_model.md - SIGNIFICANT DIVERGENCES
+Documented	Actual Implementation
+locker_room.owner_user_id	Not present - locker room has teamId + seasonId
+person.locker_room_id	Not present - person has sandboxId instead
+team.locker_room_id (1:1)	Inverted: lockerRoom.teamId references team
+team_roster table	Named team_member with different structure
+roster_role_id FK	Uses teamRoleId + permission enum (ADMIN/MEMBER/VIEWER)
+game.referee_person_id	Not present - uses game_official table instead
+game_participant.team_id, person_id	Uses teamMemberId FK instead
+game_event.game_id, team_id, person_id	Uses gameParticipantId FK instead
+player_stats table	Not implemented
+standings table	Not implemented
+message / calendar_event tables	Not implemented
+audit_log / audit_settings tables	Schema exists but not actively used
+Hard deletes policy	Soft deletes used (isActive flag)
+Key structural differences:
+
+Sandbox model (documented in 21_sandbox_design.md) replaces the locker_room_id ownership pattern
+Locker room is season-scoped, not 1:1 with team
+Permission model uses teamPermissionEnum (ADMIN/MEMBER/VIEWER) not role-based (OWNER/HEAD_COACH/etc.)
+04_api_design.md - NEEDS UPDATE
+Documented	Actual Implementation
+Base URL: /api/v1/	Uses /api/ (no version prefix)
+Locker room-scoped routes (/locker-rooms/:lrId/teams)	Team-centric routes (/teams, /teams/:id/members)
+/api/v1/teams/:teamId/roster	/api/teams/:teamId/members
+Pagination response format	Not implemented (no pagination)
+Rate limiting	Not implemented
+Public page endpoints	Not implemented
+05_auth_and_security.md - NEEDS UPDATE
+Documented	Actual Implementation
+Better-Auth library	Custom auth with express-session + bcrypt
+Team roles: OWNER, HEAD_COACH, COACH, MANAGER, PLAYER, PARENT	Uses teamPermissionEnum: ADMIN, MEMBER, VIEWER
+App roles in user_roles table	Uses userRole table with appRoleEnum
+JWT tokens	Session-based auth (cookies)
+00_design_overview.md - MINOR UPDATES
+Documented	Actual
+"Sandbox" renamed to "Locker Room"	Both concepts exist separately - sandbox is visibility boundary, locker room is season-scoped workspace
+Frontend: TBD	Vite + React
+21_sandbox_design.md - ACCURATE ✅
+This document is current and reflects the actual implementation. The permission system reference added recently is accurate.
+
+Recommended Actions
+High Priority: Update 03_data_model.md with actual schema (biggest divergence)
+High Priority: Update 05_auth_and_security.md to reflect session-based auth and simplified permission model
+Medium Priority: Update 01_tech_stack.md for Vite+React
+Medium Priority: Update 04_api_design.md with actual route structure
+Low Priority: Update 00_design_overview.md to clarify sandbox vs locker room distinction

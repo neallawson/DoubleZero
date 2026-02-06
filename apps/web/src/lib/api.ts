@@ -74,6 +74,10 @@ class ApiClient {
     return this.request<T>('PATCH', path, body);
   }
 
+  put<T>(path: string, body?: unknown) {
+    return this.request<T>('PUT', path, body);
+  }
+
   delete<T>(path: string) {
     return this.request<T>('DELETE', path);
   }
@@ -354,4 +358,125 @@ export interface PlayerPosition {
 export const lookupsApi = {
   teamRoles: () => api.get<TeamRole[]>('/v1/lookups/team-roles'),
   playerPositions: () => api.get<PlayerPosition[]>('/v1/lookups/player-positions'),
+};
+
+// Plays API (Playboard Composer)
+export type AnnotationType = 'LINE' | 'ARROW' | 'DASHED_LINE' | 'DASHED_ARROW';
+
+export interface PlayPlayer {
+  id?: number;
+  teamMemberId: number | null;
+  xMeters: number;
+  yMeters: number;
+  displayNumber: number | null;
+  displayName: string | null;
+  teamColorOverride: string | null;
+  teamSide: number;
+  zIndex: number;
+}
+
+export interface PlayAnnotation {
+  id?: number;
+  annotationType: AnnotationType;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  color: string;
+  strokeWidth: number;
+  zIndex: number;
+}
+
+export interface Play {
+  id: number;
+  ownerId: number;
+  teamId: number | null;
+  name: string;
+  description: string | null;
+  tags: string[] | null;
+  fieldTemplateId: number | null;
+  viewportZoom: number | null;
+  viewportPanX: number | null;
+  viewportPanY: number | null;
+  clientId: string | null;
+  lastSyncedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  players?: PlayPlayer[];
+  annotations?: PlayAnnotation[];
+}
+
+export interface FieldTemplate {
+  id: number;
+  name: string;
+  description: string | null;
+  lengthMeters: number;
+  widthMeters: number;
+  originPosition: string;
+  markings: Record<string, number> | null;
+  isDefault: boolean;
+}
+
+export const playsApi = {
+  list: (params?: { teamId?: number; tags?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.teamId) searchParams.set('teamId', params.teamId.toString());
+    if (params?.tags) searchParams.set('tags', params.tags);
+    const query = searchParams.toString();
+    return api.get<Play[]>(`/v1/plays${query ? `?${query}` : ''}`);
+  },
+  get: (id: number) => api.get<Play>(`/v1/plays/${id}`),
+  create: (data: {
+    name: string;
+    description?: string;
+    tags?: string[];
+    teamId?: number;
+    fieldTemplateId?: number;
+    clientId?: string;
+  }) => api.post<Play>('/v1/plays', data),
+  update: (id: number, data: {
+    name?: string;
+    description?: string;
+    tags?: string[];
+    viewportZoom?: number;
+    viewportPanX?: number;
+    viewportPanY?: number;
+    version: number;
+  }) => api.patch<Play>(`/v1/plays/${id}`, data),
+  delete: (id: number) => api.delete(`/v1/plays/${id}`),
+
+  // Bulk operations for players and annotations
+  updatePlayers: (playId: number, players: PlayPlayer[]) =>
+    api.put<PlayPlayer[]>(`/v1/plays/${playId}/players`, { players }),
+  updateAnnotations: (playId: number, annotations: PlayAnnotation[]) =>
+    api.put<PlayAnnotation[]>(`/v1/plays/${playId}/annotations`, { annotations }),
+
+  // Field templates
+  getFieldTemplates: () => api.get<FieldTemplate[]>('/v1/plays/field-templates'),
+
+  // Offline sync
+  sync: (data: {
+    plays: Array<{
+      clientId: string;
+      serverId?: number;
+      play: {
+        name: string;
+        description?: string;
+        tags?: string[];
+        fieldTemplateId?: number;
+      };
+      players: PlayPlayer[];
+      annotations: PlayAnnotation[];
+      deletedAt?: string;
+    }>;
+  }) => api.post<{
+    results: Array<{
+      clientId: string;
+      serverId: number | null;
+      status: 'created' | 'updated' | 'deleted' | 'error';
+      message?: string;
+    }>;
+    serverTimestamp: string;
+  }>('/v1/plays/sync', data),
 };

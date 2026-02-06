@@ -8,6 +8,13 @@
       "when": 1770077129304,
       "tag": "0000_medical_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770318384019,
+      "tag": "0001_classy_odin",
+      "breakpoints": true
     }
   ]
 }

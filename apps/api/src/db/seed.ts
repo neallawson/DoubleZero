@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from './index.js';
-import { teamRole, playerPosition, gameType, gameStatus, gameEventType } from './schema/index.js';
+import { teamRole, playerPosition, gameType, gameStatus, gameEventType, fieldTemplate } from './schema/index.js';
 
 async function seed() {
   console.log('🌱 Seeding database...');
@@ -84,6 +84,29 @@ async function seed() {
     { name: 'Timeout', description: 'Timeout called' },
     { name: 'Half Time', description: 'Half time' },
     { name: 'Full Time', description: 'Full time' },
+  ]).onConflictDoNothing();
+
+  // Seed field templates for playboard
+  console.log('  → Field templates...');
+  await db.insert(fieldTemplate).values([
+    {
+      name: 'Standard 11v11',
+      description: 'Standard full-size 11v11 soccer pitch (100m x 64m)',
+      lengthMeters: 100,
+      widthMeters: 64,
+      originPosition: 'center',
+      isDefault: true,
+      markings: {
+        centerCircleRadius: 9.15,
+        penaltyAreaLength: 16.5,
+        penaltyAreaWidth: 40.3,
+        goalAreaLength: 5.5,
+        goalAreaWidth: 18.3,
+        penaltySpotDistance: 11,
+        cornerArcRadius: 1,
+        goalWidth: 7.32,
+      },
+    },
   ]).onConflictDoNothing();
 
   console.log('✅ Seeding complete!');
