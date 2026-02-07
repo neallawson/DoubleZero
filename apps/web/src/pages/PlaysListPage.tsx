@@ -14,6 +14,7 @@ interface PlayItem {
   tags?: string[] | null;
   isLocal: boolean;
   updatedAt?: string | Date;
+  version?: number;
 }
 
 export function PlaysListPage() {
@@ -67,6 +68,7 @@ export function PlaysListPage() {
                   tags: p.tags,
                   isLocal: false,
                   updatedAt: p.updatedAt,
+                  version: p.version,
                 };
               } else {
                 allPlays.push({
@@ -76,6 +78,7 @@ export function PlaysListPage() {
                   tags: p.tags,
                   isLocal: false,
                   updatedAt: p.updatedAt,
+                  version: p.version,
                 });
               }
             }
@@ -137,15 +140,33 @@ export function PlaysListPage() {
           lastModified: new Date(),
         });
       }
-    } else if (typeof editingPlay.id === 'number') {
+    } else if (typeof editingPlay.id === 'number' && editingPlay.version !== undefined) {
       // Update server play
-      await playsApi.update(editingPlay.id, {
+      const response = await playsApi.update(editingPlay.id, {
         name: editName,
         tags: newTags.length > 0 ? newTags : undefined,
+        version: editingPlay.version,
       });
+
+      if (response.success && response.data) {
+        // Update local state with new version from server
+        setPlays((prev) =>
+          prev.map((p) =>
+            p.id === editingPlay.id
+              ? { ...p, name: editName, tags: newTags.length > 0 ? newTags : null, version: response.data!.version }
+              : p
+          )
+        );
+        setEditingPlay(null);
+        return;
+      } else {
+        console.error('Failed to update play:', response.error);
+        alert('Failed to save changes. Please try again.');
+        return;
+      }
     }
 
-    // Update local state
+    // Update local state (for local plays)
     setPlays((prev) =>
       prev.map((p) =>
         p.id === editingPlay.id

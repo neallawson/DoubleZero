@@ -689,7 +689,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <DialogTitle>{isEdit ? 'Edit Member' : 'Add Member'}</DialogTitle>
+            <DialogTitle>{isEdit ? `Edit: ${selectedMember?.person?.displayName}` : 'Add Member'}</DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
