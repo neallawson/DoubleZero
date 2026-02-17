@@ -16,6 +16,8 @@ interface PlayboardMobileMenuProps {
   onClearData: () => void;
   hasUnsavedChanges: boolean;
   playName: string;
+  onToggleDesktopView?: () => void;
+  showDesktopToggle?: boolean;
 }
 
 interface ToolOption {
@@ -52,6 +54,8 @@ export function PlayboardMobileMenu({
   onClearData,
   hasUnsavedChanges,
   playName,
+  onToggleDesktopView,
+  showDesktopToggle = false,
 }: PlayboardMobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -105,14 +109,22 @@ export function PlayboardMobileMenu({
                 </button>
               </div>
 
-              {/* DEBUG: Clear all data button */}
-              <div className="mb-3 pb-2 border-b border-gray-700">
+              {/* DEBUG section and Desktop toggle */}
+              <div className="mb-3 pb-2 border-b border-gray-700 flex gap-2">
                 <button
                   onClick={() => { onClearData(); setIsOpen(false); }}
-                  className="w-full py-1.5 text-xs bg-red-600 text-white rounded-lg active:bg-red-700"
+                  className="flex-1 py-1.5 text-xs bg-red-600 text-white rounded-lg active:bg-red-700"
                 >
-                  🗑 Clear All Local Data (DEBUG)
+                  🗑 Clear DB
                 </button>
+                {showDesktopToggle && onToggleDesktopView && (
+                  <button
+                    onClick={() => { onToggleDesktopView(); setIsOpen(false); }}
+                    className="flex-1 py-1.5 text-xs bg-slate-600 text-white rounded-lg active:bg-slate-700"
+                  >
+                    Exit Full Screen
+                  </button>
+                )}
               </div>
 
               {/* Landscape: horizontal layout, Portrait: vertical layout */}

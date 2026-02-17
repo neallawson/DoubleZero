@@ -11,3 +11,4 @@ export * from './roster';
 export * from './game';
 export * from './audit';
 export * from './playboard';
+export * from './config';

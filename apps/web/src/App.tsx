@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { AppConfigProvider } from '@/contexts/AppConfigContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoginPage } from '@/pages/LoginPage';
 import { LockerRoomPage } from '@/pages/LockerRoomPage';
@@ -101,7 +102,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <AppConfigProvider>
+          <AppRoutes />
+        </AppConfigProvider>
       </AuthProvider>
     </BrowserRouter>
   );

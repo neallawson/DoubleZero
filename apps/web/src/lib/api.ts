@@ -480,3 +480,30 @@ export const playsApi = {
     serverTimestamp: string;
   }>('/v1/plays/sync', data),
 };
+
+// Config API (System Settings)
+export interface AppConfig {
+  key: string;
+  value: string | null;
+  description: string | null;
+  isActive: boolean;
+  version: number;
+}
+
+export const configApi = {
+  // Get all active config as key-value map (for regular users)
+  getAll: () => api.get<Record<string, string | null>>('/v1/config'),
+
+  // Get specific config value
+  get: (key: string) => api.get<AppConfig>(`/v1/config/${key}`),
+
+  // Admin: Get all config entries with full details
+  getAllAdmin: () => api.get<AppConfig[]>('/v1/config/all'),
+
+  // Admin: Create or update a config value
+  set: (key: string, data: { value?: string | null; description?: string; isActive?: boolean }) =>
+    api.put<AppConfig>(`/v1/config/${key}`, data),
+
+  // Admin: Delete a config entry
+  delete: (key: string) => api.delete(`/v1/config/${key}`),
+};

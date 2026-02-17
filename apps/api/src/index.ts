@@ -12,6 +12,7 @@ import locationsRouter from './routes/locations.js';
 import gamesRouter from './routes/games.js';
 import usersRouter from './routes/users.js';
 import playsRouter from './routes/plays.js';
+import configRouter from './routes/config.js';
 import { checkDatabaseConnection } from './db/index.js';
 
 const app: Express = express();
@@ -65,6 +66,7 @@ app.use('/api/v1/locations', locationsRouter);
 app.use('/api/v1/games', gamesRouter);
 app.use('/api/v1/users', usersRouter);
 app.use('/api/v1/plays', playsRouter);
+app.use('/api/v1/config', configRouter);
 
 // Error handling middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

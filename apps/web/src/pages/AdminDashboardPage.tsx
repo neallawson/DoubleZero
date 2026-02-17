@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { usersApi, personsApi, type AdminUser, type Person } from '@/lib/api';
+import { useAppConfig, CONFIG_KEYS } from '@/contexts/AppConfigContext';
+import { usersApi, personsApi, configApi, type AdminUser, type Person } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
@@ -12,21 +13,24 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { 
-  Shield, 
-  ShieldOff, 
-  UserCheck, 
-  UserX, 
-  Link2, 
-  Unlink, 
+import {
+  Shield,
+  ShieldOff,
+  UserCheck,
+  UserX,
+  Link2,
+  Unlink,
   Loader2,
   ChevronRight,
   Users,
-  Plus
+  Plus,
+  Settings,
+  Server
 } from 'lucide-react';
 
 export function AdminDashboardPage() {
   const { user: currentUser } = useAuth();
+  const { getConfig, refreshConfig } = useAppConfig();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
@@ -36,6 +40,10 @@ export function AdminDashboardPage() {
   const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
   const [newUserForm, setNewUserForm] = useState({ email: '', password: '' });
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
+
+  // Get current config values
+  const playboardServerOnly = getConfig(CONFIG_KEYS.PLAYBOARD_SERVER_ONLY, 'false') === 'true';
 
   useEffect(() => {
     loadData();
@@ -153,6 +161,24 @@ export function AdminDashboardPage() {
     } else {
       alert(response.error?.message || 'Failed to create user');
     }
+  }
+
+  async function handleToggleServerOnly() {
+    setIsUpdatingConfig(true);
+    const newValue = !playboardServerOnly;
+
+    const response = await configApi.set(CONFIG_KEYS.PLAYBOARD_SERVER_ONLY, {
+      value: newValue ? 'true' : 'false',
+      description: 'When enabled, Playboard bypasses local IndexedDB storage and syncs directly with server',
+    });
+
+    if (response.success) {
+      await refreshConfig();
+    } else {
+      alert(response.error?.message || 'Failed to update setting');
+    }
+
+    setIsUpdatingConfig(false);
   }
 
   // Get unlinked persons for the link dialog
@@ -350,6 +376,48 @@ export function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* System Settings */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            System Settings
+          </CardTitle>
+          <CardDescription>Configure application-wide settings</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Playboard Server Only Mode */}
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center gap-3">
+                <Server className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">Playboard Server-Only Mode</div>
+                  <div className="text-sm text-muted-foreground">
+                    Bypass local storage (IndexedDB) and sync all plays directly with server.
+                    Useful for testing or when offline mode is not needed.
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant={playboardServerOnly ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleToggleServerOnly}
+                disabled={isUpdatingConfig}
+              >
+                {isUpdatingConfig ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : playboardServerOnly ? (
+                  'Enabled'
+                ) : (
+                  'Disabled'
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Link Person Dialog */}
       <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>

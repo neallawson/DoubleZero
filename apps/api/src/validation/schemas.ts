@@ -282,7 +282,7 @@ export const PlayAnnotationSchema = z.object({
   endX: worldCoordinate,
   endY: worldCoordinate,
   color: optionalString(20),
-  strokeWidth: z.number().min(0.5).max(20).optional().nullable(),
+  strokeWidth: z.number().min(0.1).max(20).optional().nullable(),
   zIndex: z.number().int().optional().nullable(),
 });
 

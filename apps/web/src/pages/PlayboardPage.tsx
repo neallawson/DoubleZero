@@ -7,6 +7,7 @@ import { RosterPanel } from '../components/playboard/panels/RosterPanel';
 import { usePlayboardState } from '../components/playboard/hooks/usePlayboardState';
 import { useOfflineSync, type SyncStatus } from '../components/playboard/hooks/useOfflineSync';
 import { useAuth } from '../contexts/AuthContext';
+import { usePlayboardServerOnly } from '../contexts/AppConfigContext';
 import { teamMembersApi, teamsApi, type TeamMember, type Team } from '../lib/api';
 import type { AnnotationType } from '../components/playboard/shapes/ArrowShape';
 import type { PlayerSelection } from '../components/playboard/panels/PlayerPickerPopup';
@@ -17,15 +18,17 @@ import type { PlayerSelection } from '../components/playboard/panels/PlayerPicke
 function StatusIndicator({
   hasUnsavedChanges,
   syncStatus,
-  isOnline
+  isOnline,
+  serverOnly = false
 }: {
   hasUnsavedChanges: boolean;
   syncStatus: SyncStatus;
   isOnline: boolean;
+  serverOnly?: boolean;
 }) {
   const getStatusColor = () => {
     if (hasUnsavedChanges) return 'bg-yellow-500';
-    if (!isOnline) return 'bg-yellow-500';
+    if (!isOnline && !serverOnly) return 'bg-yellow-500';
     switch (syncStatus) {
       case 'synced': return 'bg-green-500';
       case 'pending': return 'bg-yellow-500';
@@ -37,7 +40,7 @@ function StatusIndicator({
 
   const getStatusText = () => {
     if (hasUnsavedChanges) return 'Unsaved';
-    if (!isOnline) return 'Offline';
+    if (!isOnline && !serverOnly) return 'Offline';
     switch (syncStatus) {
       case 'synced': return 'Saved';
       case 'pending': return 'Syncing...';
@@ -49,6 +52,11 @@ function StatusIndicator({
 
   return (
     <div className="flex items-center gap-2">
+      {serverOnly && (
+        <span className="text-xs text-orange-400 font-medium px-1.5 py-0.5 bg-orange-900/50 rounded">
+          Server Mode
+        </span>
+      )}
       <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
       <span className="text-xs text-gray-400">{getStatusText()}</span>
     </div>
@@ -63,6 +71,7 @@ export function PlayboardPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { user, activeTeam } = useAuth();
+  const serverOnly = usePlayboardServerOnly();
 
   const [playName, setPlayName] = useState('Untitled Play');
   const [playClientId, setPlayClientId] = useState<string | null>(null);
@@ -79,6 +88,20 @@ export function PlayboardPage() {
   // Track if we're in the process of loading (to skip marking as unsaved)
   // Using a ref so it updates synchronously and is immediately visible
   const isLoadingDataRef = useRef(false);
+
+  // Mobile view toggle - null means use CSS breakpoint, true/false forces mobile/desktop
+  const [forceMobileView, setForceMobileView] = useState<boolean | null>(null);
+  // Detect actual screen size for the toggle button label
+  const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsSmallScreen(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Determine if we should show mobile UI
+  const showMobileUI = forceMobileView ?? isSmallScreen;
 
   const {
     players,
@@ -113,7 +136,7 @@ export function PlayboardPage() {
     saveAnnotations,
     syncNow,
     clearAllPlays,
-  } = useOfflineSync();
+  } = useOfflineSync({ serverOnly });
 
   // Load team roster
   useEffect(() => {
@@ -156,13 +179,27 @@ export function PlayboardPage() {
       isLoadingDataRef.current = true;
       setHasUnsavedChanges(false);
       const playId = parseInt(id, 10);
-      if (!isNaN(playId)) {
-        loadPlay(playId).then((result) => {
+      const idToLoad = !isNaN(playId) ? playId : id;
+
+      loadPlay(idToLoad)
+        .then((result) => {
           if (result) {
             setPlayClientId(result.play.clientId);
             setPlayName(result.play.name);
             loadPlayData(result.players, result.annotations);
+          } else {
+            console.error('Play not found:', idToLoad);
+            // Reset to empty state if play not found
+            resetState();
+            setPlayName('Play Not Found');
           }
+        })
+        .catch((error) => {
+          console.error('Error loading play:', error);
+          resetState();
+          setPlayName('Error Loading Play');
+        })
+        .finally(() => {
           setIsLoading(false);
           // Delay clearing the loading flag and explicitly mark as saved
           setTimeout(() => {
@@ -170,22 +207,6 @@ export function PlayboardPage() {
             setHasUnsavedChanges(false);
           }, 50);
         });
-      } else {
-        // Assume it's a clientId
-        loadPlay(id).then((result) => {
-          if (result) {
-            setPlayClientId(result.play.clientId);
-            setPlayName(result.play.name);
-            loadPlayData(result.players, result.annotations);
-          }
-          setIsLoading(false);
-          // Delay clearing the loading flag and explicitly mark as saved
-          setTimeout(() => {
-            isLoadingDataRef.current = false;
-            setHasUnsavedChanges(false);
-          }, 50);
-        });
-      }
     } else {
       // New play - no ID, no playClientId yet
       setPlayClientId(null);
@@ -298,40 +319,54 @@ export function PlayboardPage() {
   }, [addPlayer, team]);
 
   const handleSave = useCallback(async () => {
-    const playerData = players.map((p) => ({
-      id: p.id,
-      x: p.x,
-      y: p.y,
-      number: p.number,
-      name: p.name,
-      teamSide: p.teamSide,
-      teamColor: p.teamColor,
-      teamMemberId: p.teamMemberId,
-    }));
+    try {
+      const playerData = players.map((p) => ({
+        id: p.id,
+        x: p.x,
+        y: p.y,
+        number: p.number,
+        name: p.name,
+        teamSide: p.teamSide,
+        teamColor: p.teamColor,
+        teamMemberId: p.teamMemberId,
+      }));
 
-    if (!playClientId) {
-      // Create new play
-      const newClientId = await createPlay(playName);
-      setPlayClientId(newClientId);
+      console.log('[Save] Starting save...', { playClientId, playerCount: players.length, annotationCount: annotations.length });
+      console.log('[Save] Annotations:', JSON.stringify(annotations));
 
-      // Always save players and annotations (even if empty, to handle deletions)
-      await savePlayers(newClientId, playerData);
-      await saveAnnotations(newClientId, annotations);
+      if (!playClientId) {
+        // Create new play
+        const newClientId = await createPlay(playName);
+        setPlayClientId(newClientId);
 
-      // Update URL to include the new play ID (without full navigation)
-      window.history.replaceState(null, '', `/playboard/${newClientId}`);
-    } else {
-      // Update existing play - always save everything
-      await savePlayData(playClientId, { name: playName });
-      await savePlayers(playClientId, playerData);
-      await saveAnnotations(playClientId, annotations);
-    }
+        // Always save players and annotations (even if empty, to handle deletions)
+        console.log('[Save] Saving players for new play...');
+        await savePlayers(newClientId, playerData);
+        console.log('[Save] Players saved. Saving annotations...');
+        await saveAnnotations(newClientId, annotations);
+        console.log('[Save] Annotations saved.');
 
-    setHasUnsavedChanges(false);
+        // Update URL to include the new play ID (without full navigation)
+        window.history.replaceState(null, '', `/playboard/${newClientId}`);
+      } else {
+        // Update existing play - always save everything
+        console.log('[Save] Updating existing play...');
+        await savePlayData(playClientId, { name: playName });
+        console.log('[Save] Play data saved. Saving players...');
+        await savePlayers(playClientId, playerData);
+        console.log('[Save] Players saved. Saving annotations...');
+        await saveAnnotations(playClientId, annotations);
+        console.log('[Save] Annotations saved.');
+      }
 
-    // Sync immediately if online
-    if (isOnline) {
-      await syncNow();
+      setHasUnsavedChanges(false);
+
+      // Sync immediately if online
+      if (isOnline) {
+        await syncNow();
+      }
+    } catch (error) {
+      console.error('[Save] ERROR during save:', error);
     }
   }, [playClientId, playName, players, annotations, createPlay, savePlayData, savePlayers, saveAnnotations, isOnline, syncNow]);
 
@@ -343,6 +378,15 @@ export function PlayboardPage() {
     }
     // Navigate to /playboard with no ID - the load effect will reset state
     navigate('/playboard');
+  }, [hasUnsavedChanges, navigate]);
+
+  const handleBack = useCallback(() => {
+    // Check for unsaved changes
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm('You have unsaved changes. Discard and leave?');
+      if (!confirmed) return;
+    }
+    navigate('/plays');
   }, [hasUnsavedChanges, navigate]);
 
   // DEBUG: Clear all local play data
@@ -389,62 +433,71 @@ export function PlayboardPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-900">
       {/* Header - hidden on mobile, shown on desktop */}
-      <header className="hidden md:flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center gap-4">
-          <a href="/locker-room" className="text-gray-400 hover:text-white">
-            ← Back
-          </a>
-          <h1 className="text-lg font-semibold text-white">Playboard</h1>
-          {showNameInput ? (
-            <input
-              type="text"
-              value={playName}
-              onChange={handleNameChange}
-              onBlur={handleNameBlur}
-              onKeyDown={handleNameKeyDown}
-              className="px-2 py-1 text-sm bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-              autoFocus
-            />
-          ) : (
-            <span
-              className="text-sm text-gray-400 cursor-pointer hover:text-white"
-              onClick={() => setShowNameInput(true)}
-            >
-              {playName}
-            </span>
-          )}
-        </div>
+      {!showMobileUI && (
+        <header className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+          <div className="flex items-center gap-4">
+            <button onClick={handleBack} className="text-gray-400 hover:text-white">
+              ← Back
+            </button>
+            <h1 className="text-lg font-semibold text-white">Playboard</h1>
+            {showNameInput ? (
+              <input
+                type="text"
+                value={playName}
+                onChange={handleNameChange}
+                onBlur={handleNameBlur}
+                onKeyDown={handleNameKeyDown}
+                className="px-2 py-1 text-sm bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                autoFocus
+              />
+            ) : (
+              <span
+                className="text-sm text-gray-400 cursor-pointer hover:text-white"
+                onClick={() => setShowNameInput(true)}
+              >
+                {playName}
+              </span>
+            )}
+          </div>
 
-        {/* Desktop header controls */}
-        <div className="flex items-center gap-4">
-          <StatusIndicator hasUnsavedChanges={hasUnsavedChanges} syncStatus={syncStatus} isOnline={isOnline} />
-          <span className="text-xs text-gray-500">
-            {players.length} players, {annotations.length} annotations
-          </span>
-          <button
-            onClick={handleSave}
-            className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded"
-          >
-            Save
-          </button>
-          <button
-            onClick={handleNewPlay}
-            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded"
-          >
-            New Play
-          </button>
-          <button
-            onClick={handleClearAllData}
-            className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded"
-            title="DEBUG: Clear all local play data"
-          >
-            Clear DB
-          </button>
-        </div>
-      </header>
+          {/* Desktop header controls */}
+          <div className="flex items-center gap-4">
+            <StatusIndicator hasUnsavedChanges={hasUnsavedChanges} syncStatus={syncStatus} isOnline={isOnline} serverOnly={serverOnly} />
+            <span className="text-xs text-gray-500">
+              {players.length} players, {annotations.length} annotations
+            </span>
+            <button
+              onClick={() => setForceMobileView(true)}
+              className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded"
+              title="Switch to full screen view"
+            >
+              Full Screen
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded"
+            >
+              Save
+            </button>
+            <button
+              onClick={handleNewPlay}
+              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded"
+            >
+              New Play
+            </button>
+            <button
+              onClick={handleClearAllData}
+              className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded"
+              title="DEBUG: Clear all local play data"
+            >
+              Clear DB
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Toolbar - desktop only */}
-      <div className="hidden md:block">
+      {!showMobileUI && (
         <PlayboardToolbar
           selectedTool={selectedTool}
           onToolChange={setTool}
@@ -456,7 +509,7 @@ export function PlayboardPage() {
           onRedo={redo}
           className="border-b border-gray-700"
         />
-      </div>
+      )}
 
       {/* Canvas area - takes full remaining space */}
       <main className="flex-1 overflow-hidden relative">
@@ -480,13 +533,11 @@ export function PlayboardPage() {
           className="bg-gray-800"
         />
         {/* Roster panel - desktop only */}
-        <div className="hidden md:block">
-          <RosterPanel onAddPlayer={handleAddPlayerFromRoster} />
-        </div>
+        {!showMobileUI && <RosterPanel onAddPlayer={handleAddPlayerFromRoster} />}
       </main>
 
       {/* Mobile FAB menu */}
-      <div className="md:hidden">
+      {showMobileUI && (
         <PlayboardMobileMenu
           selectedTool={selectedTool}
           onToolChange={setTool}
@@ -498,25 +549,29 @@ export function PlayboardPage() {
           onRedo={redo}
           onSave={handleSave}
           onNewPlay={handleNewPlay}
-          onBack={() => navigate('/locker-room')}
+          onBack={handleBack}
           onClearData={handleClearAllData}
           hasUnsavedChanges={hasUnsavedChanges}
           playName={playName}
+          onToggleDesktopView={() => setForceMobileView(false)}
+          showDesktopToggle={!isSmallScreen}
         />
-      </div>
+      )}
 
       {/* Footer / Status bar - desktop only */}
-      <footer className="hidden md:flex items-center justify-between px-4 py-1 bg-gray-800 border-t border-gray-700 text-xs text-gray-400">
-        <div className="flex gap-4">
-          <span>V/S: Select</span>
-          <span>P: Add Player</span>
-          <span>L: Line</span>
-          <span>A: Arrow</span>
-          <span>Del: Delete</span>
-          <span>Ctrl+S: Save</span>
-        </div>
-        <span>Scroll/pinch to zoom, drag to pan</span>
-      </footer>
+      {!showMobileUI && (
+        <footer className="flex items-center justify-between px-4 py-1 bg-gray-800 border-t border-gray-700 text-xs text-gray-400">
+          <div className="flex gap-4">
+            <span>V/S: Select</span>
+            <span>P: Add Player</span>
+            <span>L: Line</span>
+            <span>A: Arrow</span>
+            <span>Del: Delete</span>
+            <span>Ctrl+S: Save</span>
+          </div>
+          <span>Scroll/pinch to zoom, drag to pan</span>
+        </footer>
+      )}
     </div>
   );
 }

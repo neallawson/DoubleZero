@@ -25,7 +25,7 @@ This document outlines the phased implementation approach for DoubleZero. Each s
      api-client/      # Typed API wrapper (shared by web + mobile)
    apps/
      api/             # Express backend
-     web/             # Next.js frontend
+     web/             # React/Next.js frontend
      mobile/          # Expo React Native app
    ```
 3. Configure TypeScript with shared base config
@@ -680,6 +680,25 @@ For each feature, verify:
 | 6 | Reporting & Polish | 2-3 days |
 
 **Total**: ~3-4 weeks for MVP
+
+---
+
+## Upcoming Tasks
+
+### Shared Zod Schemas (`packages/schema`)
+**Goal**: Extract Zod validation schemas into a shared workspace package so frontend and backend stay in sync.
+
+**Context**: A `strokeWidth` validation mismatch (backend min `0.5` vs frontend default `0.2`) caused annotation saves to silently fail. Sharing schemas prevents this class of bug.
+
+**Steps**:
+1. Create `packages/schema/` workspace package (`@doublezero/schema`)
+2. Move API request/response Zod schemas from `apps/api/src/validation/schemas.ts` into shared package
+3. Move shared TypeScript interfaces (e.g., `PlayAnnotation`, `PlayPlayer`) into shared package
+4. Update `apps/api` to import schemas from `@doublezero/schema` for request validation
+5. Update `apps/web` to import schemas from `@doublezero/schema` for type inference and optional client-side validation
+6. Verify both apps build and all existing functionality works
+
+**Blocked by**: Confirm Playboard CRUD is fully working first.
 
 ---
 
