@@ -16,6 +16,8 @@ export interface PlayerData {
 
 interface PlayerIconProps {
   player: PlayerData;
+  radius?: number;
+  textRotation?: number;
   isSelected?: boolean;
   onSelect?: (playerId: string) => void;
   onDragEnd?: (playerId: string, x: number, y: number) => void;
@@ -39,6 +41,8 @@ const PLAYER_RADIUS = 1.5;  // meters
  */
 export function PlayerIcon({
   player,
+  radius = PLAYER_RADIUS,
+  textRotation = 0,
   isSelected = false,
   onSelect,
   onDragEnd,
@@ -127,7 +131,7 @@ export function PlayerIcon({
         <Circle
           x={0}
           y={0}
-          radius={PLAYER_RADIUS + 0.4}
+          radius={radius + 0.4}
           stroke="#ffffff"
           strokeWidth={0.2}
           dash={[0.3, 0.2]}
@@ -139,7 +143,7 @@ export function PlayerIcon({
         <Circle
           x={0.15}
           y={0.15}
-          radius={PLAYER_RADIUS}
+          radius={radius}
           fill="rgba(0,0,0,0.3)"
         />
       )}
@@ -148,17 +152,17 @@ export function PlayerIcon({
       <Circle
         x={0}
         y={0}
-        radius={PLAYER_RADIUS}
+        radius={radius}
         fill={teamColor}
         stroke={isDragging ? '#ffffff' : teamColorLight}
         strokeWidth={isDragging ? 0.2 : 0.15}
       />
 
-      {/* Player number */}
+      {/* Player number - counter-rotated in portrait to stay upright */}
       <Text
-        x={-PLAYER_RADIUS}
-        y={-fontSize / 2}
-        width={PLAYER_RADIUS * 2}
+        x={textRotation ? 0 : -radius}
+        y={textRotation ? 0 : -fontSize / 2}
+        width={radius * 2}
         height={fontSize}
         text={displayNumber}
         fontSize={fontSize}
@@ -166,6 +170,9 @@ export function PlayerIcon({
         fill="#ffffff"
         align="center"
         verticalAlign="middle"
+        rotation={textRotation}
+        offsetX={textRotation ? radius : 0}
+        offsetY={textRotation ? fontSize / 2 : 0}
       />
     </Group>
   );

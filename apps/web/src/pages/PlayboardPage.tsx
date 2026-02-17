@@ -431,7 +431,7 @@ export function PlayboardPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col h-dvh bg-gray-900">
       {/* Header - hidden on mobile, shown on desktop */}
       {!showMobileUI && (
         <header className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">

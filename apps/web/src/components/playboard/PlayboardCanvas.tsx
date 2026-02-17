@@ -83,24 +83,30 @@ export function PlayboardCanvas({
   // Player picker popup state
   const [pickerPosition, setPickerPosition] = useState<{ screen: { x: number; y: number }; world: { x: number; y: number } } | null>(null);
 
-  // Update canvas size on resize
+  // Update canvas size on resize using ResizeObserver for reliable detection
+  // of dvh changes (URL bar show/hide), orientation changes, etc.
   useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setCanvasSize({ width: rect.width, height: rect.height });
-      }
-    };
+    const container = containerRef.current;
+    if (!container) return;
 
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setCanvasSize({ width, height });
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
+
+  // Detect portrait orientation
+  const isPortrait = canvasSize.height > canvasSize.width;
 
   // Helper to get world coordinates from pointer position
   const getWorldCoords = useCallback((pointerPos: { x: number; y: number }) => {
-    return screenToWorld(pointerPos, viewport, DEFAULT_FIELD_TEMPLATE.dimensions, canvasSize);
-  }, [viewport, canvasSize]);
+    return screenToWorld(pointerPos, viewport, DEFAULT_FIELD_TEMPLATE.dimensions, canvasSize, isPortrait);
+  }, [viewport, canvasSize, isPortrait]);
 
   // Mouse wheel zoom
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -119,6 +125,11 @@ export function PlayboardCanvas({
       const newScale = direction > 0
         ? Math.min(VIEWPORT_LIMITS.maxScale, prev.scale * scaleBy)
         : Math.max(VIEWPORT_LIMITS.minScale, prev.scale / scaleBy);
+
+      // When at or below default zoom, keep field centered
+      if (newScale <= 1) {
+        return { scale: newScale, offsetX: 0, offsetY: 0 };
+      }
 
       const mousePointTo = {
         x: (pointer.x - prev.offsetX) / prev.scale,
@@ -187,6 +198,11 @@ export function PlayboardCanvas({
             Math.max(VIEWPORT_LIMITS.minScale, prev.scale * scale)
           );
 
+          // When at or below default zoom, keep field centered
+          if (newScale <= 1) {
+            return { scale: newScale, offsetX: 0, offsetY: 0 };
+          }
+
           const scaleRatio = newScale / prev.scale;
           const newOffsetX = newCenter.x - (newCenter.x - prev.offsetX) * scaleRatio;
           const newOffsetY = newCenter.y - (newCenter.y - prev.offsetY) * scaleRatio;
@@ -204,7 +220,8 @@ export function PlayboardCanvas({
 
       setLastCenter(newCenter);
       setLastDist(newDist);
-    } else if (touches.length === 1 && selectedTool === 'select') {
+    } else if (touches.length === 1 && selectedTool === 'select' && viewport.scale > 1) {
+      // Only allow single-finger pan when zoomed in
       const touch = touches[0];
       const newCenter = { x: touch.clientX, y: touch.clientY };
 
@@ -408,7 +425,8 @@ export function PlayboardCanvas({
   const stageTransform = getStageTransform(
     viewport,
     DEFAULT_FIELD_TEMPLATE.dimensions,
-    canvasSize
+    canvasSize,
+    isPortrait
   );
 
   return (
@@ -421,6 +439,7 @@ export function PlayboardCanvas({
         scaleY={stageTransform.scaleY}
         x={stageTransform.x}
         y={stageTransform.y}
+        rotation={stageTransform.rotation}
         onWheel={handleWheel}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -444,6 +463,8 @@ export function PlayboardCanvas({
         <Layer>
           <PlayerLayer
             players={players}
+            playerRadius={isPortrait ? 2.5 : 1.5}
+            textRotation={isPortrait ? 90 : 0}
             selectedPlayerId={selectedPlayerId}
             onSelectPlayer={onSelectPlayer}
             onPlayerDragEnd={onPlayerDragEnd}
@@ -476,19 +497,23 @@ export function PlayboardCanvas({
       {/* Zoom controls - desktop only */}
       <div className="hidden md:flex absolute bottom-4 right-4 flex-col gap-2">
         <button
-          onClick={() => setViewport((prev) => ({
-            ...prev,
-            scale: Math.min(VIEWPORT_LIMITS.maxScale, prev.scale * 1.2),
-          }))}
+          onClick={() => setViewport((prev) => {
+            const newScale = Math.min(VIEWPORT_LIMITS.maxScale, prev.scale * 1.2);
+            return newScale <= 1
+              ? { scale: newScale, offsetX: 0, offsetY: 0 }
+              : { ...prev, scale: newScale };
+          })}
           className="w-10 h-10 bg-white/90 hover:bg-white rounded-lg shadow-md flex items-center justify-center text-xl font-bold"
         >
           +
         </button>
         <button
-          onClick={() => setViewport((prev) => ({
-            ...prev,
-            scale: Math.max(VIEWPORT_LIMITS.minScale, prev.scale / 1.2),
-          }))}
+          onClick={() => setViewport((prev) => {
+            const newScale = Math.max(VIEWPORT_LIMITS.minScale, prev.scale / 1.2);
+            return newScale <= 1
+              ? { scale: newScale, offsetX: 0, offsetY: 0 }
+              : { ...prev, scale: newScale };
+          })}
           className="w-10 h-10 bg-white/90 hover:bg-white rounded-lg shadow-md flex items-center justify-center text-xl font-bold"
         >
           -

@@ -3,6 +3,8 @@ import { PlayerIcon, type PlayerData } from '../shapes/PlayerIcon';
 
 interface PlayerLayerProps {
   players: PlayerData[];
+  playerRadius?: number;
+  textRotation?: number;
   selectedPlayerId?: string | null;
   onSelectPlayer?: (playerId: string) => void;
   onPlayerDragEnd?: (playerId: string, x: number, y: number) => void;
@@ -15,6 +17,8 @@ interface PlayerLayerProps {
  */
 export function PlayerLayer({
   players,
+  playerRadius,
+  textRotation,
   selectedPlayerId,
   onSelectPlayer,
   onPlayerDragEnd,
@@ -26,6 +30,8 @@ export function PlayerLayer({
         <PlayerIcon
           key={player.id}
           player={player}
+          radius={playerRadius}
+          textRotation={textRotation}
           isSelected={player.id === selectedPlayerId}
           onSelect={onSelectPlayer}
           onDragEnd={onPlayerDragEnd}

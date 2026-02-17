@@ -88,14 +88,35 @@ export function worldToScreen(
 }
 
 /**
- * Convert screen coordinates (pixels) to world coordinates (meters from center)
+ * Convert screen coordinates (pixels) to world coordinates (meters from center).
+ * In portrait mode, applies inverse of the -90° stage rotation.
  */
 export function screenToWorld(
   screen: ScreenCoords,
   viewport: ViewportTransform,
   field: FieldDimensions,
-  canvas: CanvasSize
+  canvas: CanvasSize,
+  isPortrait: boolean = false
 ): WorldCoords {
+  if (isPortrait) {
+    const swappedCanvas: CanvasSize = { width: canvas.height, height: canvas.width };
+    const baseScale = calculateBaseScale(field, swappedCanvas);
+    const centerOffset = calculateCenterOffset(field, swappedCanvas, baseScale);
+
+    const finalScale = baseScale * viewport.scale;
+
+    // Remove stage translation to get rotated-space coords
+    const rx = screen.x - (centerOffset.offsetY * viewport.scale + viewport.offsetX);
+    const ry = screen.y - (centerOffset.offsetX * viewport.scale + viewport.offsetY);
+
+    // Forward: screen_x = stageX + world_y * fs, screen_y = stageY - world_x * fs
+    // Inverse: world_x = -ry / fs, world_y = rx / fs
+    return {
+      x: -ry / finalScale,
+      y: rx / finalScale,
+    };
+  }
+
   const baseScale = calculateBaseScale(field, canvas);
   const centerOffset = calculateCenterOffset(field, canvas, baseScale);
 
@@ -108,13 +129,37 @@ export function screenToWorld(
 }
 
 /**
- * Get the Konva stage transform props for the current viewport
+ * Get the Konva stage transform props for the current viewport.
+ * In portrait mode (isPortrait=true), the stage is rotated -90° so the field's
+ * length runs top-to-bottom, and scale is calculated with swapped canvas dimensions.
  */
 export function getStageTransform(
   viewport: ViewportTransform,
   field: FieldDimensions,
-  canvas: CanvasSize
-): { scaleX: number; scaleY: number; x: number; y: number } {
+  canvas: CanvasSize,
+  isPortrait: boolean = false
+): { scaleX: number; scaleY: number; x: number; y: number; rotation: number } {
+  if (isPortrait) {
+    // Swap canvas dimensions so field.length maps to screen height
+    const swappedCanvas: CanvasSize = { width: canvas.height, height: canvas.width };
+    const baseScale = calculateBaseScale(field, swappedCanvas);
+    const centerOffset = calculateCenterOffset(field, swappedCanvas, baseScale);
+
+    const finalScale = baseScale * viewport.scale;
+
+    // Use the same linear form as landscape (A * scale + offset) so that
+    // the pinch-zoom and wheel-zoom formulas work correctly.
+    // centerOffset.offsetY = canvas.width/2 and centerOffset.offsetX = canvas.height/2,
+    // so at scale=1 this places the stage origin at the screen center.
+    return {
+      scaleX: finalScale,
+      scaleY: finalScale,
+      x: centerOffset.offsetY * viewport.scale + viewport.offsetX,
+      y: centerOffset.offsetX * viewport.scale + viewport.offsetY,
+      rotation: -90,
+    };
+  }
+
   const baseScale = calculateBaseScale(field, canvas);
   const centerOffset = calculateCenterOffset(field, canvas, baseScale);
 
@@ -125,6 +170,7 @@ export function getStageTransform(
     scaleY: finalScale,
     x: centerOffset.offsetX * viewport.scale + viewport.offsetX,
     y: centerOffset.offsetY * viewport.scale + viewport.offsetY,
+    rotation: 0,
   };
 }
 
