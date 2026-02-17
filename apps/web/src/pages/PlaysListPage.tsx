@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getAllPlays, savePlay, getPlay, deletePlay as deleteLocalPlay } from '../lib/playboard/offlineStorage';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, LayoutGrid, List } from 'lucide-react';
 
 interface PlayItem {
   id: string | number;
@@ -23,6 +23,9 @@ export function PlaysListPage() {
   const [plays, setPlays] = useState<PlayItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(
+    window.innerWidth < 768 ? 'list' : 'grid'
+  );
   const [editingPlay, setEditingPlay] = useState<PlayItem | null>(null);
   const [editName, setEditName] = useState('');
   const [editTags, setEditTags] = useState('');
@@ -109,6 +112,10 @@ export function PlaysListPage() {
   const filteredPlays = selectedTag
     ? plays.filter((p) => p.tags?.includes(selectedTag))
     : plays;
+
+  const handleViewModeChange = useCallback((mode: 'grid' | 'list') => {
+    setViewMode(mode);
+  }, []);
 
   const handleOpenPlay = (play: PlayItem) => {
     navigate(`/playboard/${play.id}`);
@@ -208,9 +215,31 @@ export function PlaysListPage() {
             Manage your tactical plays and formations
           </p>
         </div>
-        <Button onClick={() => navigate('/playboard')}>
-          New Play
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center">
+            <Button
+              size="icon"
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              onClick={() => handleViewModeChange('list')}
+              title="List view"
+              className="h-8 w-8 rounded-r-none"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              onClick={() => handleViewModeChange('grid')}
+              title="Grid view"
+              className="h-8 w-8 rounded-l-none"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button onClick={() => navigate('/playboard')}>
+            New Play
+          </Button>
+        </div>
       </div>
 
       {/* Tag filters */}
@@ -252,66 +281,118 @@ export function PlaysListPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPlays.map((play) => (
-            <Card
-              key={play.id}
-              className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => handleOpenPlay(play)}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-lg flex-1">{play.name}</CardTitle>
-                  <div className="flex items-center gap-1 ml-2">
-                    {play.isLocal && (
-                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                        Local
-                      </span>
-                    )}
-                    <button
-                      onClick={(e) => handleEditClick(e, play)}
-                      className="p-1.5 hover:bg-muted rounded transition-colors"
-                      title="Edit play"
-                    >
-                      <Pencil className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteClick(e, play)}
-                      className="p-1.5 hover:bg-destructive/10 rounded transition-colors"
-                      title="Delete play"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
-                  </div>
+        viewMode === 'list' ? (
+          <div className="border rounded-lg divide-y">
+            {filteredPlays.map((play) => (
+              <div
+                key={play.id}
+                className="flex items-center gap-3 py-2 px-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => handleOpenPlay(play)}
+              >
+                <span className="font-medium truncate flex-1 min-w-0">{play.name}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {play.tags && play.tags.length > 0 && (
+                    <div className="hidden sm:flex items-center gap-1">
+                      {play.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs bg-muted px-1.5 py-0.5 rounded"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {play.isLocal && (
+                    <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">
+                      Local
+                    </span>
+                  )}
+                  {play.updatedAt && (
+                    <span className="text-xs text-muted-foreground hidden sm:inline whitespace-nowrap">
+                      {new Date(play.updatedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => handleEditClick(e, play)}
+                    className="p-1 hover:bg-muted rounded transition-colors"
+                    title="Edit play"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                  <button
+                    onClick={(e) => handleDeleteClick(e, play)}
+                    className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                    title="Delete play"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  </button>
                 </div>
-                {play.description && (
-                  <CardDescription className="line-clamp-2">
-                    {play.description}
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                {play.tags && play.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {play.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-xs bg-muted px-2 py-1 rounded"
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredPlays.map((play) => (
+              <Card
+                key={play.id}
+                className="cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => handleOpenPlay(play)}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-lg flex-1">{play.name}</CardTitle>
+                    <div className="flex items-center gap-1 ml-2">
+                      {play.isLocal && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                          Local
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => handleEditClick(e, play)}
+                        className="p-1.5 hover:bg-muted rounded transition-colors"
+                        title="Edit play"
                       >
-                        {tag}
-                      </span>
-                    ))}
+                        <Pencil className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteClick(e, play)}
+                        className="p-1.5 hover:bg-destructive/10 rounded transition-colors"
+                        title="Delete play"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </button>
+                    </div>
                   </div>
-                )}
-                {play.updatedAt && (
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(play.updatedAt).toLocaleString()}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  {play.description && (
+                    <CardDescription className="line-clamp-2">
+                      {play.description}
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {play.tags && play.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {play.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs bg-muted px-2 py-1 rounded"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {play.updatedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(play.updatedAt).toLocaleString()}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
       )}
 
       <div className="mt-6">
