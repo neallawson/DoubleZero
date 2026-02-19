@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DoubleZero Database Schema</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -16,147 +15,90 @@
     h1 { color: #333; border-bottom: 2px solid #007acc; padding-bottom: 10px; }
     h2 { color: #555; margin-top: 30px; }
     h3 { color: #666; margin-top: 20px; font-size: 1em; }
-    #diagram-container {
-      position: relative;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    #diagram-container .mermaid {
-      padding: 0;
-    }
-    #diagram-container svg {
-      width: 100% !important;
-      height: 80vh !important;
-    }
-    .zoom-controls {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 10;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .zoom-controls button {
-      width: 36px;
-      height: 36px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      background: white;
-      font-size: 18px;
-      font-weight: bold;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-      color: #333;
-    }
-    .zoom-controls button:hover { background: #f0f0f0; }
-    .zoom-controls button:active { background: #e0e0e0; }
-    .zoom-hint {
-      text-align: center;
-      font-size: 0.8em;
-      color: #999;
-      margin-top: 6px;
-    }
+    .mermaid { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .seed-section { margin-top: 40px; }
     .seed-table { margin-bottom: 30px; }
-    .seed-table h4 {
-      background: #007acc;
-      color: white;
-      padding: 8px 12px;
-      margin: 0;
+    .seed-table h4 { 
+      background: #007acc; 
+      color: white; 
+      padding: 8px 12px; 
+      margin: 0; 
       border-radius: 6px 6px 0 0;
       font-size: 0.9em;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
       font-size: 0.75em;
       background: white;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    th {
-      background: #e8e8e8;
-      padding: 6px 8px;
-      text-align: left;
+    th { 
+      background: #e8e8e8; 
+      padding: 6px 8px; 
+      text-align: left; 
       border: 1px solid #ddd;
       font-weight: 600;
     }
-    td {
-      padding: 4px 8px;
-      border: 1px solid #ddd;
+    td { 
+      padding: 4px 8px; 
+      border: 1px solid #ddd; 
     }
     tr:nth-child(even) { background: #fafafa; }
     .note { background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 0.85em; }
   </style>
 </head>
 <body>
-  <h1>DoubleZero Database Schema (v3)</h1>
-
+  <h1>DoubleZero Database Schema (v2 - Season-Aware)</h1>
+  
   <div class="note">
-    <strong>Required Fields:</strong> Non-PK columns marked with <code>*</code> are NOT NULL (required). PK columns are always required.<br>
-    <strong>Enums:</strong>
-      <code>app_role</code> (ADMIN, USER) |
-      <code>team_permission</code> (ADMIN, MEMBER, VIEWER) |
-      <code>official_role</code> (REFEREE, LINE_JUDGE, FOURTH_OFFICIAL) |
-      <code>annotation_type</code> (LINE, ARROW, DASHED_LINE, DASHED_ARROW)<br>
-    <strong>Soft Delete:</strong> Most entities use <code>isActive</code> boolean<br>
-    <strong>Optimistic Locking:</strong> Most entities have <code>version</code> field<br>
-    <strong>Sandbox Model:</strong> Entities with <code>sandboxId</code> are private to the owning team
+    <strong>Permission Model:</strong> ADMIN (system) | TEAM_ADMIN | TEAM_MEMBER<br>
+    <strong>Soft Delete:</strong> All entities use <code>isActive</code> boolean<br>
+    <strong>Optimistic Locking:</strong> All entities have <code>version</code> field<br>
+    <strong>Sandbox Model:</strong> Entities with <code>sandboxId</code> are private to the owning team. See <a href="21_sandbox_design.md">Sandbox Design Doc</a>
   </div>
 
   <h2>Entity Relationship Diagram</h2>
-  <div id="diagram-container">
-    <div class="zoom-controls">
-      <button id="zoom-in" title="Zoom in">+</button>
-      <button id="zoom-out" title="Zoom out">&minus;</button>
-      <button id="zoom-reset" title="Reset view">&#8634;</button>
-    </div>
-    <div class="mermaid">
+  <div class="mermaid">
 erDiagram
     %% ===== USER & AUTH =====
     user {
         int id PK
-        string email UK "*"
+        string email "UK"
         string passwordHash
-        boolean isVerified "*"
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        boolean isVerified
+        boolean isActive
+        int version
+        timestamp createdAt
     }
-
+    
     user_role {
         int id PK
-        int userId FK "*"
-        enum role "*  app_role"
-        timestamp createdAt "*"
+        int userId FK
+        string role "ADMIN or USER"
     }
-
+    
     session {
         string id PK
-        int userId FK "*"
-        string token "*"
-        timestamp expiresAt "*"
-        timestamp createdAt "*"
+        int userId FK
+        string token
+        timestamp expiresAt
+        timestamp createdAt
     }
-
+    
     user_session_state {
         int id PK
-        string sessionId FK "* unique"
+        string sessionId FK "unique"
         int activeTeamId FK "nullable"
-        timestamp createdAt "*"
+        timestamp createdAt
     }
 
     %% ===== SANDBOX =====
     sandbox {
         int id PK
-        int teamId FK "* owning team"
-        string name "*"
-        timestamp createdAt "*"
+        int teamId FK "owning team"
+        string name
+        timestamp createdAt
     }
 
     %% ===== PERSON =====
@@ -164,40 +106,40 @@ erDiagram
         int id PK
         int sandboxId FK "nullable"
         int userId FK "nullable, unique"
-        string displayName "*"
+        string displayName
         string firstName
         string lastName
         string email
         string phone
-        text photo
+        bytes photo
         date dateOfBirth
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        boolean isActive
+        int version
+        timestamp createdAt
     }
 
     %% ===== LEAGUE & SEASON =====
     league {
         int id PK
         int sandboxId FK "nullable"
-        string name UK "*"
-        text description
+        string name "UK"
+        string description
         string governingBody
         int activeSeasonId FK "nullable"
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        boolean isActive
+        int version
+        timestamp createdAt
     }
-
+    
     season {
         int id PK
-        int leagueId FK "*"
-        string name "*"
+        int leagueId FK
+        string name
         date startDate
         date endDate
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        boolean isActive
+        int version
+        timestamp createdAt
     }
 
     %% ===== TEAM & MEMBERSHIP =====
@@ -206,242 +148,182 @@ erDiagram
         int leagueId FK "nullable"
         int activeSeasonId FK "nullable"
         int sandboxId FK "nullable"
-        string name "*"
+        string name
         string shortName
         string primaryColor
         string secondaryColor
-        text icon
+        bytes icon
         string iconMime
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        boolean isActive
+        int version
+        timestamp createdAt
     }
-
+    
     locker_room {
         int id PK
-        int teamId FK "*"
-        int seasonId FK "*"
-        string name "*"
-        text description
-        boolean isPublic "*"
-        int version "*"
-        timestamp createdAt "*"
+        int teamId FK
+        int seasonId FK
+        string name
+        string description
+        boolean isPublic
+        int version
+        timestamp createdAt
     }
-
+    
     team_member {
         int id PK
-        int teamId FK "*"
-        int personId FK "*"
-        int seasonId FK "*"
-        enum permission "* team_permission"
+        int teamId FK
+        int personId FK
+        int seasonId FK
+        string permission "TEAM_ADMIN or TEAM_MEMBER"
         int teamRoleId FK "nullable"
         int positionId FK "nullable"
-        int jerseyNumber
-        string title
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        int jerseyNumber "nullable"
+        string title "nullable"
+        boolean isActive
+        int version
     }
-
+    
     team_role {
         int id PK
-        string name UK "*"
-        text description
-        boolean isActive "*"
+        string name "UK"
+        string description
+        boolean isActive
     }
-
+    
     player_position {
         int id PK
-        string name UK "*"
+        string name "UK"
         string shortName
-        text description
-        boolean isActive "*"
+        string description
+        boolean isActive
     }
 
     %% ===== LOCATION =====
     location {
         int id PK
         int sandboxId FK "nullable"
-        string name "*"
+        string name
         string address
         string city
         string state
         string zip
         string country
         int homeTeamId FK "nullable"
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
+        boolean isActive
+        int version
+        timestamp createdAt
     }
 
     %% ===== GAME =====
     game {
         int id PK
-        int seasonId FK "*"
+        int seasonId FK
         int locationId FK "nullable"
         int sandboxId FK "nullable"
-        int gameTypeId FK "*"
-        int statusId FK "*"
-        date date "*"
-        string startTime "varchar(10)"
-        string endTime "varchar(10)"
-        int homeTeamId FK "*"
-        int awayTeamId FK "*"
+        int gameTypeId FK
+        int statusId FK
+        date date
+        time startTime
+        time endTime
+        int homeTeamId FK
+        int awayTeamId FK
         int homeScore
         int awayScore
         int attendance
         string weather
         text notes
-        int version "*"
-        timestamp createdAt "*"
+        int version
+        timestamp createdAt
     }
-
+    
     game_type {
         int id PK
-        string name UK "*"
-        text description
-        boolean isActive "*"
+        string name "UK"
+        string description
+        boolean isActive
     }
-
+    
     game_status {
         int id PK
-        string name UK "*"
-        boolean isActive "*"
+        string name "UK"
+        boolean isActive
     }
-
+    
     game_participant {
         int id PK
-        int gameId FK "*"
-        int teamMemberId FK "*"
+        int gameId FK
+        int teamMemberId FK
         int positionId FK "nullable"
-        int jerseyNumber
-        boolean isStarter "*"
-        boolean isCaptain "*"
+        int jerseyNumber "nullable"
+        boolean isStarter
+        boolean isCaptain
         int minutesPlayed
-        int version "*"
+        int version
     }
-
+    
     game_official {
         int id PK
-        int gameId FK "*"
-        int personId FK "*"
-        enum role "* official_role"
-        int version "*"
+        int gameId FK
+        int personId FK
+        string role "REFEREE, LINE_JUDGE, etc"
+        int version
     }
-
+    
     game_event {
         int id PK
-        int gameParticipantId FK "*"
-        int eventTypeId FK "*"
+        int gameParticipantId FK
+        int eventTypeId FK
         int matchMinute
         int matchSecond
-        float fieldX
-        float fieldY
+        int fieldX
+        int fieldY
         text notes
         int relatedParticipantId FK "nullable"
+        int version
+        timestamp createdAt
     }
-
+    
     game_event_type {
         int id PK
-        string name UK "*"
-        text description
-        boolean isActive "*"
+        string name "UK"
+        string description
+        boolean isActive
     }
 
-    %% ===== PLAYBOARD =====
-    field_template {
-        int id PK
-        string name "*"
-        text description
-        float lengthMeters "*"
-        float widthMeters "*"
-        string originPosition "*"
-        json markings
-        boolean isActive "*"
-        boolean isDefault "*"
-        timestamp createdAt "*"
-    }
-
-    play {
-        int id PK
-        int ownerId FK "* user"
-        int teamId FK "nullable"
-        int sandboxId FK "nullable"
-        string name "*"
-        text description
-        text_array tags
-        int fieldTemplateId FK "nullable"
-        float viewportZoom
-        float viewportPanX
-        float viewportPanY
-        string clientId
-        timestamp lastSyncedAt
-        int version "*"
-        timestamp createdAt "*"
-        timestamp updatedAt "*"
-    }
-
-    play_player {
-        int id PK
-        int playId FK "*"
-        int teamMemberId FK "nullable"
-        float xMeters "*"
-        float yMeters "*"
-        int displayNumber
-        string displayName
-        string teamColorOverride
-        int teamSide "*"
-        int zIndex "*"
-        int version "*"
-    }
-
-    play_annotation {
-        int id PK
-        int playId FK "*"
-        enum annotationType "* annotation_type"
-        float startX "*"
-        float startY "*"
-        float endX "*"
-        float endY "*"
-        string color "default #ffffff"
-        float strokeWidth "default 2"
-        int zIndex "*"
-        int version "*"
-    }
-
-    %% ===== AUDIT & CONFIG =====
+    %% ===== AUDIT =====
     audit_log {
         int id PK
-        string tableName "*"
-        int recordId "*"
-        string operation "*"
+        string tableName
+        int recordId
+        string operation
         int userId FK "nullable"
-        timestamp changedAt "*"
+        timestamp changedAt
         json oldValues
         json newValues
         string ipAddress
         text userAgent
         string requestPath
     }
-
+    
     audit_settings {
         int id PK
-        string tableName UK "*"
-        boolean isEnabled "*"
-        boolean trackOldValues "*"
-        boolean trackNewValues "*"
+        string tableName "UK"
+        boolean isEnabled
+        boolean trackOldValues
+        boolean trackNewValues
         int retentionDays
     }
-
+    
     app_config {
         int id PK
-        string key UK "*"
+        string key "UK"
         text value
         text description
-        boolean isActive "*"
-        int version "*"
-        timestamp createdAt "*"
-        timestamp updatedAt "*"
+        boolean isActive
+        int version
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     %% ===== RELATIONSHIPS =====
@@ -449,8 +331,8 @@ erDiagram
     user ||--o{ session : has
     user ||--o| person : "linked to"
     session ||--o| user_session_state : has
-    user_session_state }o--o| team : activeTeam
-
+    user_session_state }o--|| team : activeTeam
+    
     %% Sandbox ownership and containment
     sandbox }o--|| team : ownedBy
     sandbox ||--o{ team : containsTeams
@@ -458,25 +340,24 @@ erDiagram
     sandbox ||--o{ league : containsLeagues
     sandbox ||--o{ location : containsLocations
     sandbox ||--o{ person : containsPersons
-    sandbox ||--o{ play : containsPlays
-
+    
     league ||--o{ season : contains
     league }o--o| season : activeSeason
     league ||--o{ team : contains
-
+    
     team ||--o{ locker_room : hasPerSeason
     team ||--o{ team_member : has
     team }o--o| season : activeSeason
-
+    
     locker_room }o--|| season : forSeason
-
+    
     team_member }o--|| person : is
     team_member }o--|| season : forSeason
     team_member }o--o| team_role : has
     team_member }o--o| player_position : plays
-
+    
     location }o--o| team : homeOf
-
+    
     game }o--|| season : inSeason
     game }o--o| location : playedAt
     game }o--|| game_type : is
@@ -485,28 +366,18 @@ erDiagram
     game }o--|| team : awayTeam
     game ||--o{ game_participant : has
     game ||--o{ game_official : has
-
+    
     game_participant }o--|| team_member : is
     game_participant }o--o| player_position : playsAs
     game_participant ||--o{ game_event : triggers
-
+    
     game_official }o--|| person : is
-
+    
     game_event }o--|| game_event_type : is
     game_event }o--o| game_participant : involves
-
+    
     audit_log }o--o| user : by
-
-    %% Playboard relationships
-    play }o--|| user : ownedBy
-    play }o--o| team : forTeam
-    play }o--o| field_template : usesTemplate
-    play ||--o{ play_player : has
-    play ||--o{ play_annotation : has
-    play_player }o--o| team_member : linkedTo
-    </div>
   </div>
-  <p class="zoom-hint">Scroll to zoom &middot; Click and drag to pan &middot; Use +/&minus; buttons or double-click to zoom</p>
 
   <h2 class="seed-section">Seed Data</h2>
   <p style="font-size: 0.85em; color: #666;">The following lookup tables are pre-populated by the seed script.</p>
@@ -602,17 +473,9 @@ erDiagram
     </table>
   </div>
 
-  <div class="seed-table">
-    <h4>field_template</h4>
-    <table>
-      <tr><th>name</th><th>description</th><th>length</th><th>width</th><th>isDefault</th></tr>
-      <tr><td>Standard 11v11</td><td>Standard full-size 11v11 soccer pitch (100m x 64m)</td><td>100m</td><td>64m</td><td>true</td></tr>
-    </table>
-  </div>
-
   <script>
-    mermaid.initialize({
-      startOnLoad: false,
+    mermaid.initialize({ 
+      startOnLoad: true,
       theme: 'default',
       er: {
         layoutDirection: 'TB',
@@ -620,41 +483,6 @@ erDiagram
         minEntityHeight: 75,
         entityPadding: 15
       }
-    });
-
-    // Render mermaid, then attach pan-zoom to the resulting SVG
-    mermaid.run().then(() => {
-      const svg = document.querySelector('#diagram-container svg');
-      if (!svg) return;
-
-      const panZoom = svgPanZoom(svg, {
-        zoomEnabled: true,
-        controlIconsEnabled: false,
-        fit: true,
-        center: true,
-        minZoom: 0.3,
-        maxZoom: 10,
-        zoomScaleSensitivity: 0.3,
-        dblClickZoomEnabled: true,
-        mouseWheelZoomEnabled: true,
-        panEnabled: true,
-      });
-
-      document.getElementById('zoom-in').addEventListener('click', () => panZoom.zoomIn());
-      document.getElementById('zoom-out').addEventListener('click', () => panZoom.zoomOut());
-      document.getElementById('zoom-reset').addEventListener('click', () => {
-        panZoom.resetZoom();
-        panZoom.resetPan();
-        panZoom.fit();
-        panZoom.center();
-      });
-
-      // Re-fit on window resize
-      window.addEventListener('resize', () => {
-        panZoom.resize();
-        panZoom.fit();
-        panZoom.center();
-      });
     });
   </script>
 </body>
