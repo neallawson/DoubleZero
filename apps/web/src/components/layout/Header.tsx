@@ -38,7 +38,7 @@ export function Header({ onOpenCrudMenu }: HeaderProps) {
   const showTeamPicker = teamMemberships.length > 1;
 
   return (
-    <header className="border-b bg-background">
+    <header className="border-b bg-background pt-[env(safe-area-inset-top)]">
       <div className="flex h-14 items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <Link to="/" className="text-lg font-semibold hover:text-primary transition-colors">
