@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { locationsApi, type Location } from '@/lib/api';
+import { locationsApi, formatApiError, type Location } from '@/lib/api';
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 
 interface LocationCrudModalProps {
@@ -52,12 +52,24 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
     if (response.success && response.data) {
       setLocations(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load locations');
+      setError(formatApiError(response, 'Failed to load locations'));
     }
+  }
+
+  function populateFormData(location: Location) {
+    setFormData({
+      name: location.name,
+      address: location.address || '',
+      city: location.city || '',
+      state: location.state || '',
+      zip: location.zip || '',
+      country: location.country || '',
+    });
   }
 
   function handleSelectLocation(location: Location) {
     setSelectedLocation(location);
+    populateFormData(location);
     setViewMode('view');
   }
 
@@ -68,17 +80,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
   }
 
   function handleEdit() {
-    if (selectedLocation) {
-      setFormData({
-        name: selectedLocation.name,
-        address: selectedLocation.address || '',
-        city: selectedLocation.city || '',
-        state: selectedLocation.state || '',
-        zip: selectedLocation.zip || '',
-        country: selectedLocation.country || '',
-      });
-      setViewMode('edit');
-    }
+    setViewMode('edit');
   }
 
   function handleBack() {
@@ -86,6 +88,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
       setViewMode('list');
       setSelectedLocation(null);
     } else if (viewMode === 'edit') {
+      if (selectedLocation) populateFormData(selectedLocation);
       setViewMode('view');
     }
   }
@@ -109,9 +112,10 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
       if (response.success && response.data) {
         setLocations([...locations, response.data]);
         setSelectedLocation(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to create location');
+        setError(formatApiError(response, 'Failed to create location'));
       }
     } else if (viewMode === 'edit' && selectedLocation) {
       const response = await locationsApi.update(selectedLocation.id, {
@@ -122,16 +126,17 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
       if (response.success && response.data) {
         setLocations(locations.map(l => l.id === response.data!.id ? response.data! : l));
         setSelectedLocation(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to update location');
+        setError(formatApiError(response, 'Failed to update location'));
       }
     }
   }
 
   async function handleDelete() {
     if (!selectedLocation) return;
-    
+
     if (!confirm(`Delete "${selectedLocation.name}"?`)) return;
 
     setIsLoading(true);
@@ -143,7 +148,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
       setSelectedLocation(null);
       setViewMode('list');
     } else {
-      setError(response.error?.message || 'Failed to delete location');
+      setError(formatApiError(response, 'Failed to delete location'));
     }
   }
 
@@ -198,64 +203,13 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
     );
   }
 
-  function renderView() {
-    if (!selectedLocation) return null;
-    return (
-      <>
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <DialogTitle>{selectedLocation.name}</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label className="text-muted-foreground">Name</Label>
-            <p className="text-lg">{selectedLocation.name}</p>
-          </div>
-          <div>
-            <Label className="text-muted-foreground">Address</Label>
-            <p>{selectedLocation.address || '—'}</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">City</Label>
-              <p>{selectedLocation.city || '—'}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">State</Label>
-              <p>{selectedLocation.state || '—'}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">ZIP</Label>
-              <p>{selectedLocation.zip || '—'}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Country</Label>
-              <p>{selectedLocation.country || '—'}</p>
-            </div>
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-          <Button variant="outline" onClick={handleEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
-
-  function renderForm() {
+  function renderDetail() {
+    const isReadOnly = viewMode === 'view';
     const isCreate = viewMode === 'create';
+    const title = isReadOnly
+      ? (selectedLocation?.name || 'Location')
+      : isCreate ? 'New Location' : 'Edit Location';
+
     return (
       <>
         <DialogHeader>
@@ -263,17 +217,18 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <DialogTitle>{isCreate ? 'New Location' : 'Edit Location'}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
+            <Label htmlFor="name">Name{!isReadOnly && ' *'}</Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Main Field"
+              disabled={isReadOnly}
             />
           </div>
           <div className="space-y-2">
@@ -283,6 +238,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               placeholder="Street address"
+              disabled={isReadOnly}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -292,6 +248,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
                 id="city"
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -300,6 +257,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
                 id="state"
                 value={formData.state}
                 onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -310,6 +268,7 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
                 id="zip"
                 value={formData.zip}
                 onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -319,28 +278,42 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                 placeholder="e.g., USA"
+                disabled={isReadOnly}
               />
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleBack}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!formData.name || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {isCreate ? 'Create' : 'Save'}
-          </Button>
-        </DialogFooter>
+        {isReadOnly ? (
+          <DialogFooter className="gap-2">
+            <Button variant="destructive" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button variant="outline" onClick={handleEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="outline" onClick={handleBack}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!formData.name || isLoading}>
+              {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {isCreate ? 'Create' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
       </>
     );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         {error && (
-          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 whitespace-pre-line">
             {error}
           </div>
         )}
@@ -350,10 +323,8 @@ export function LocationCrudModal({ open, onOpenChange, onClose, onBack }: Locat
           </div>
         ) : viewMode === 'list' ? (
           renderList()
-        ) : viewMode === 'view' ? (
-          renderView()
         ) : (
-          renderForm()
+          renderDetail()
         )}
       </DialogContent>
     </Dialog>

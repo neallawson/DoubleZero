@@ -4,7 +4,7 @@ import { play, playPlayer, playAnnotation, fieldTemplate } from '../db/schema/in
 import { eq, and, or, desc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAuthenticated } from '../middleware/permissions.js';
-import { validate, CreatePlaySchema, UpdatePlaySchema, BulkPlayPlayersSchema, BulkPlayAnnotationsSchema } from '../validation/index.js';
+import { validate, handleRouteError, CreatePlaySchema, UpdatePlaySchema, BulkPlayPlayersSchema, BulkPlayAnnotationsSchema } from '../validation/index.js';
 import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
@@ -60,8 +60,7 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error fetching plays:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch plays' } });
+    handleRouteError(res, error, 'Failed to fetch plays');
   }
 });
 
@@ -78,8 +77,7 @@ router.get('/field-templates', requireAuthenticated(), async (_req: Request, res
 
     res.json({ success: true, data: templates });
   } catch (error) {
-    console.error('Error fetching field templates:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch field templates' } });
+    handleRouteError(res, error, 'Failed to fetch field templates');
   }
 });
 
@@ -127,8 +125,7 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
       }
     });
   } catch (error) {
-    console.error('Error fetching play:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch play' } });
+    handleRouteError(res, error, 'Failed to fetch play');
   }
 });
 
@@ -172,8 +169,7 @@ router.post('/', requireAuthenticated(), validate(CreatePlaySchema), async (req:
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating play:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create play' } });
+    handleRouteError(res, error, 'Failed to create play');
   }
 });
 
@@ -218,8 +214,7 @@ router.patch('/:id', requireAuthenticated(), validate(UpdatePlaySchema), async (
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating play:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update play' } });
+    handleRouteError(res, error, 'Failed to update play');
   }
 });
 
@@ -249,8 +244,7 @@ router.delete('/:id', requireAuthenticated(), async (req: Request, res: Response
 
     res.json({ success: true, data: { message: 'Play deleted' } });
   } catch (error) {
-    console.error('Error deleting play:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete play' } });
+    handleRouteError(res, error, 'Failed to delete play');
   }
 });
 
@@ -304,8 +298,7 @@ router.put('/:playId/players', requireAuthenticated(), validate(BulkPlayPlayersS
 
     res.json({ success: true, data: updatedPlayers });
   } catch (error) {
-    console.error('Error updating play players:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update play players' } });
+    handleRouteError(res, error, 'Failed to update play players');
   }
 });
 
@@ -323,8 +316,7 @@ router.get('/:playId/players', requireAuthenticated(), async (req: Request, res:
     const players = await db.select().from(playPlayer).where(eq(playPlayer.playId, playId));
     res.json({ success: true, data: players });
   } catch (error) {
-    console.error('Error fetching play players:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch play players' } });
+    handleRouteError(res, error, 'Failed to fetch play players');
   }
 });
 
@@ -378,8 +370,7 @@ router.put('/:playId/annotations', requireAuthenticated(), validate(BulkPlayAnno
 
     res.json({ success: true, data: updatedAnnotations });
   } catch (error) {
-    console.error('Error updating play annotations:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update play annotations' } });
+    handleRouteError(res, error, 'Failed to update play annotations');
   }
 });
 
@@ -397,8 +388,7 @@ router.get('/:playId/annotations', requireAuthenticated(), async (req: Request, 
     const annotations = await db.select().from(playAnnotation).where(eq(playAnnotation.playId, playId));
     res.json({ success: true, data: annotations });
   } catch (error) {
-    console.error('Error fetching play annotations:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch play annotations' } });
+    handleRouteError(res, error, 'Failed to fetch play annotations');
   }
 });
 
@@ -536,8 +526,7 @@ router.post('/sync', requireAuthenticated(), async (req: Request, res: Response)
       }
     });
   } catch (error) {
-    console.error('Error syncing plays:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to sync plays' } });
+    handleRouteError(res, error, 'Failed to sync plays');
   }
 });
 

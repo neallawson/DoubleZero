@@ -1,48 +1,33 @@
 import { z } from 'zod';
-import { IdSchema, VersionSchema, TimestampSchema, EmailSchema, PhoneSchema } from '../common';
+import { requiredString, optionalString, optionalEmail, phone, dateString, optionalPositiveInt } from '../common.js';
 
-// Person entity (domain identity - players, coaches, parents, etc.)
-export const PersonSchema = z.object({
-  id: IdSchema,
-  lockerRoomId: IdSchema,
-  userId: IdSchema.nullable(), // Link to User if they have an account
-  displayName: z.string().min(1).max(100),
-  firstName: z.string().max(50).nullable(),
-  lastName: z.string().max(50).nullable(),
-  email: EmailSchema.nullable(),
-  phone: PhoneSchema,
-  photo: z.string().max(500).nullable(), // URL or base64
-  dateOfBirth: z.date().nullable(),
-  isActive: z.boolean().default(true),
-  version: VersionSchema,
-  createdAt: TimestampSchema,
+export const CreatePersonSchema = z.object({
+  displayName: requiredString(100),
+  firstName: optionalString(50),
+  lastName: optionalString(50),
+  email: optionalEmail,
+  phone: phone,
+  dateOfBirth: dateString,
+  userId: optionalPositiveInt,
+  // Optional: if provided by a team admin, auto-creates team membership
+  teamId: optionalPositiveInt,
+  // Optional team member fields when creating via team
+  teamRoleId: optionalPositiveInt,
+  positionId: optionalPositiveInt,
+  jerseyNumber: z.string().max(10).optional().nullable(),
+  title: optionalString(50),
+  permission: z.enum(['ADMIN', 'MEMBER', 'VIEWER']).optional(),
 });
 
-export const PersonCreateSchema = z.object({
-  lockerRoomId: IdSchema,
-  displayName: z.string().min(1).max(100),
-  firstName: z.string().max(50).nullable().optional(),
-  lastName: z.string().max(50).nullable().optional(),
-  email: EmailSchema.nullable().optional(),
-  phone: PhoneSchema.optional(),
-  photo: z.string().max(500).nullable().optional(),
-  dateOfBirth: z.date().nullable().optional(),
-  isActive: z.boolean().optional(),
+export const UpdatePersonSchema = z.object({
+  displayName: optionalString(100),
+  firstName: optionalString(50),
+  lastName: optionalString(50),
+  email: optionalEmail,
+  phone: phone,
+  dateOfBirth: dateString,
+  version: z.number().int().min(0),
 });
 
-export const PersonPatchSchema = z.object({
-  displayName: z.string().min(1).max(100).optional(),
-  firstName: z.string().max(50).nullable().optional(),
-  lastName: z.string().max(50).nullable().optional(),
-  email: EmailSchema.nullable().optional(),
-  phone: PhoneSchema.optional(),
-  photo: z.string().max(500).nullable().optional(),
-  dateOfBirth: z.date().nullable().optional(),
-  isActive: z.boolean().optional(),
-  version: z.number().int().nonnegative(),
-});
-
-// Types
-export type Person = z.infer<typeof PersonSchema>;
-export type PersonCreate = z.infer<typeof PersonCreateSchema>;
-export type PersonPatch = z.infer<typeof PersonPatchSchema>;
+export type CreatePersonInput = z.infer<typeof CreatePersonSchema>;
+export type UpdatePersonInput = z.infer<typeof UpdatePersonSchema>;

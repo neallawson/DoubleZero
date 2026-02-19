@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { personsApi, type Person } from '@/lib/api';
+import { personsApi, formatApiError, type Person } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 
@@ -54,12 +54,24 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
     if (response.success && response.data) {
       setPersons(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load persons');
+      setError(formatApiError(response, 'Failed to load persons'));
     }
+  }
+
+  function populateFormData(person: Person) {
+    setFormData({
+      displayName: person.displayName,
+      firstName: person.firstName || '',
+      lastName: person.lastName || '',
+      email: person.email || '',
+      phone: person.phone || '',
+      dateOfBirth: person.dateOfBirth?.split('T')[0] || '',
+    });
   }
 
   function handleSelectPerson(person: Person) {
     setSelectedPerson(person);
+    populateFormData(person);
     setViewMode('view');
   }
 
@@ -70,17 +82,7 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
   }
 
   function handleEdit() {
-    if (selectedPerson) {
-      setFormData({
-        displayName: selectedPerson.displayName,
-        firstName: selectedPerson.firstName || '',
-        lastName: selectedPerson.lastName || '',
-        email: selectedPerson.email || '',
-        phone: selectedPerson.phone || '',
-        dateOfBirth: selectedPerson.dateOfBirth?.split('T')[0] || '',
-      });
-      setViewMode('edit');
-    }
+    setViewMode('edit');
   }
 
   function handleBack() {
@@ -88,6 +90,7 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
       setViewMode('list');
       setSelectedPerson(null);
     } else if (viewMode === 'edit') {
+      if (selectedPerson) populateFormData(selectedPerson);
       setViewMode('view');
     }
   }
@@ -114,7 +117,6 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
     };
 
     // If user is a team admin (not system admin), include active team ID
-    // This will auto-create team membership for the new person
     if (!isAdmin && isTeamAdmin && activeTeam) {
       payload.teamId = activeTeam.teamId;
     }
@@ -123,13 +125,13 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
       const response = await personsApi.create(payload);
       setIsLoading(false);
       if (response.success && response.data) {
-        // Response may be { person, membership } or just person depending on whether teamId was provided
-        const personData = 'person' in response.data ? response.data.person : response.data;
+        const personData = ('person' in response.data ? (response.data as { person: Person }).person : response.data) as Person;
         setPersons([...persons, personData]);
         setSelectedPerson(personData);
+        populateFormData(personData);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to create person');
+        setError(formatApiError(response, 'Failed to create person'));
       }
     } else if (viewMode === 'edit' && selectedPerson) {
       const response = await personsApi.update(selectedPerson.id, {
@@ -140,16 +142,17 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
       if (response.success && response.data) {
         setPersons(persons.map(p => p.id === response.data!.id ? response.data! : p));
         setSelectedPerson(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to update person');
+        setError(formatApiError(response, 'Failed to update person'));
       }
     }
   }
 
   async function handleDelete() {
     if (!selectedPerson) return;
-    
+
     if (!confirm(`Delete "${selectedPerson.displayName}"?`)) return;
 
     setIsLoading(true);
@@ -161,13 +164,8 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
       setSelectedPerson(null);
       setViewMode('list');
     } else {
-      setError(response.error?.message || 'Failed to delete person');
+      setError(formatApiError(response, 'Failed to delete person'));
     }
-  }
-
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString();
   }
 
   function renderList() {
@@ -216,70 +214,13 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
     );
   }
 
-  function renderView() {
-    if (!selectedPerson) return null;
-    return (
-      <>
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <DialogTitle>{selectedPerson.displayName}</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label className="text-muted-foreground">Display Name</Label>
-            <p className="text-lg">{selectedPerson.displayName}</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">First Name</Label>
-              <p>{selectedPerson.firstName || '—'}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Last Name</Label>
-              <p>{selectedPerson.lastName || '—'}</p>
-            </div>
-          </div>
-          <div>
-            <Label className="text-muted-foreground">Email</Label>
-            <p>{selectedPerson.email || '—'}</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">Phone</Label>
-              <p>{selectedPerson.phone || '—'}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Date of Birth</Label>
-              <p>{formatDate(selectedPerson.dateOfBirth)}</p>
-            </div>
-          </div>
-          {selectedPerson.userId && (
-            <div>
-              <Label className="text-muted-foreground">Linked User</Label>
-              <p>User #{selectedPerson.userId}</p>
-            </div>
-          )}
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-          <Button variant="outline" onClick={handleEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
-
-  function renderForm() {
+  function renderDetail() {
+    const isReadOnly = viewMode === 'view';
     const isCreate = viewMode === 'create';
+    const title = isReadOnly
+      ? (selectedPerson?.displayName || 'Person')
+      : isCreate ? 'New Person' : 'Edit Person';
+
     return (
       <>
         <DialogHeader>
@@ -287,17 +228,18 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <DialogTitle>{isCreate ? 'New Person' : 'Edit Person'}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="displayName">Display Name *</Label>
+            <Label htmlFor="displayName">Display Name{!isReadOnly && ' *'}</Label>
             <Input
               id="displayName"
               value={formData.displayName}
               onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
               placeholder="How they appear in the app"
+              disabled={isReadOnly}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -307,6 +249,7 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
                 id="firstName"
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -315,6 +258,7 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
                 id="lastName"
                 value={formData.lastName}
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -325,6 +269,7 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              disabled={isReadOnly}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -335,6 +280,7 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -344,28 +290,48 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
           </div>
+          {isReadOnly && selectedPerson?.userId && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-muted-foreground">Linked User</Label>
+              <Input value={`User #${selectedPerson.userId}`} disabled />
+            </div>
+          )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleBack}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!formData.displayName || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {isCreate ? 'Create' : 'Save'}
-          </Button>
-        </DialogFooter>
+        {isReadOnly ? (
+          <DialogFooter className="gap-2">
+            <Button variant="destructive" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button variant="outline" onClick={handleEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="outline" onClick={handleBack}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!formData.displayName || isLoading}>
+              {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {isCreate ? 'Create' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
       </>
     );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         {error && (
-          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 whitespace-pre-line">
             {error}
           </div>
         )}
@@ -375,10 +341,8 @@ export function PersonCrudModal({ open, onOpenChange, onClose, onBack }: PersonC
           </div>
         ) : viewMode === 'list' ? (
           renderList()
-        ) : viewMode === 'view' ? (
-          renderView()
         ) : (
-          renderForm()
+          renderDetail()
         )}
       </DialogContent>
     </Dialog>

@@ -4,7 +4,7 @@ import { location } from '../db/schema/index.js';
 import { eq, and, ilike } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
-import { validate, CreateLocationSchema, UpdateLocationSchema } from '../validation/index.js';
+import { validate, CreateLocationSchema, UpdateLocationSchema, handleRouteError } from '../validation/index.js';
 import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
@@ -48,8 +48,7 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
     const locations = await db.select().from(location).where(whereClause).orderBy(location.name);
     res.json({ success: true, data: locations });
   } catch (error) {
-    console.error('Error fetching locations:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch locations' } });
+    handleRouteError(res, error, 'Failed to fetch locations');
   }
 });
 
@@ -79,8 +78,7 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching location:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch location' } });
+    handleRouteError(res, error, 'Failed to fetch location');
   }
 });
 
@@ -105,8 +103,7 @@ router.post('/', requireAdminOrTeamAdmin(), validate(CreateLocationSchema), asyn
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating location:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create location' } });
+    handleRouteError(res, error, 'Failed to create location');
   }
 });
 
@@ -145,8 +142,7 @@ router.patch('/:id', requireSandboxOwnerPermission(getLocationEntityContext), va
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating location:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update location' } });
+    handleRouteError(res, error, 'Failed to update location');
   }
 });
 
@@ -168,8 +164,7 @@ router.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'Location deleted' } });
   } catch (error) {
-    console.error('Error deleting location:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete location' } });
+    handleRouteError(res, error, 'Failed to delete location');
   }
 });
 

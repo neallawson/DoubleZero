@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { gamesApi, teamsApi, locationsApi, leaguesApi, type Game, type Team, type Location, type League, type Season } from '@/lib/api';
+import { gamesApi, teamsApi, locationsApi, leaguesApi, lookupsApi, formatApiError, type Game, type Team, type Location, type League, type Season, type GameType, type GameStatus } from '@/lib/api';
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 
 interface GameCrudModalProps {
@@ -27,10 +27,13 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
   const [locations, setLocations] = useState<Location[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
+  const [gameTypes, setGameTypes] = useState<GameType[]>([]);
+  const [gameStatuses, setGameStatuses] = useState<GameStatus[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cachedLeagueId, setCachedLeagueId] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -38,11 +41,16 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
     seasonId: '',
     homeTeamId: '',
     awayTeamId: '',
+    gameTypeId: '',
+    statusId: '',
     locationId: '',
     date: '',
     startTime: '',
+    endTime: '',
     homeScore: '',
     awayScore: '',
+    attendance: '',
+    weather: '',
     notes: '',
   });
 
@@ -52,6 +60,8 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       loadTeams();
       loadLocations();
       loadLeagues();
+      loadGameTypes();
+      loadGameStatuses();
     }
   }, [open]);
 
@@ -72,7 +82,7 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
     if (response.success && response.data) {
       setGames(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load games');
+      setError(formatApiError(response, 'Failed to load games'));
     }
   }
 
@@ -97,6 +107,20 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
     }
   }
 
+  async function loadGameTypes() {
+    const response = await lookupsApi.gameTypes();
+    if (response.success && response.data) {
+      setGameTypes(response.data);
+    }
+  }
+
+  async function loadGameStatuses() {
+    const response = await lookupsApi.gameStatuses();
+    if (response.success && response.data) {
+      setGameStatuses(response.data);
+    }
+  }
+
   async function loadSeasons(leagueId: number) {
     const response = await leaguesApi.listSeasons(leagueId);
     if (response.success && response.data) {
@@ -110,12 +134,6 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
     return team?.name || `Team #${teamId}`;
   }
 
-  function getLocationName(locationId: number | null) {
-    if (!locationId) return '—';
-    const location = locations.find(l => l.id === locationId);
-    return location?.name || `Location #${locationId}`;
-  }
-
   function formatDate(dateStr: string | null) {
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleDateString();
@@ -126,9 +144,45 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
     return timeStr.substring(0, 5); // HH:MM
   }
 
-  function handleSelectGame(game: Game) {
+  function populateFormData(game: Game, leagueId: string) {
+    setFormData({
+      leagueId,
+      seasonId: game.seasonId.toString(),
+      homeTeamId: game.homeTeamId.toString(),
+      awayTeamId: game.awayTeamId.toString(),
+      gameTypeId: game.gameTypeId?.toString() || '',
+      statusId: game.statusId?.toString() || '',
+      locationId: game.locationId?.toString() || '',
+      date: game.date?.split('T')[0] || '',
+      startTime: formatTime(game.startTime),
+      endTime: formatTime(game.endTime),
+      homeScore: game.homeScore?.toString() || '',
+      awayScore: game.awayScore?.toString() || '',
+      attendance: game.attendance?.toString() || '',
+      weather: game.weather || '',
+      notes: game.notes || '',
+    });
+  }
+
+  async function handleSelectGame(game: Game) {
     setSelectedGame(game);
     setViewMode('view');
+
+    // Find the league that owns this game's season
+    let foundLeagueId = '';
+    for (const league of leagues) {
+      const response = await leaguesApi.listSeasons(league.id);
+      if (response.success && response.data) {
+        if (response.data.some(s => s.id === game.seasonId)) {
+          foundLeagueId = league.id.toString();
+          setSeasons(response.data);
+          break;
+        }
+      }
+    }
+
+    setCachedLeagueId(foundLeagueId);
+    populateFormData(game, foundLeagueId);
   }
 
   function handleCreate() {
@@ -137,11 +191,16 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       seasonId: '',
       homeTeamId: '',
       awayTeamId: '',
+      gameTypeId: '',
+      statusId: '',
       locationId: '',
       date: '',
       startTime: '',
+      endTime: '',
       homeScore: '',
       awayScore: '',
+      attendance: '',
+      weather: '',
       notes: '',
     });
     setSelectedGame(null);
@@ -149,25 +208,7 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
   }
 
   function handleEdit() {
-    if (selectedGame) {
-      // Find the league for this season
-      const season = seasons.find(s => s.id === selectedGame.seasonId);
-      const leagueId = season ? leagues.find(l => l.id === season.leagueId)?.id.toString() || '' : '';
-      
-      setFormData({
-        leagueId,
-        seasonId: selectedGame.seasonId.toString(),
-        homeTeamId: selectedGame.homeTeamId.toString(),
-        awayTeamId: selectedGame.awayTeamId.toString(),
-        locationId: selectedGame.locationId?.toString() || '',
-        date: selectedGame.date?.split('T')[0] || '',
-        startTime: formatTime(selectedGame.startTime),
-        homeScore: selectedGame.homeScore?.toString() || '',
-        awayScore: selectedGame.awayScore?.toString() || '',
-        notes: selectedGame.notes || '',
-      });
-      setViewMode('edit');
-    }
+    setViewMode('edit');
   }
 
   function handleBack() {
@@ -175,6 +216,7 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       setViewMode('list');
       setSelectedGame(null);
     } else if (viewMode === 'edit') {
+      if (selectedGame) populateFormData(selectedGame, cachedLeagueId);
       setViewMode('view');
     }
   }
@@ -187,11 +229,16 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       seasonId: parseInt(formData.seasonId, 10),
       homeTeamId: parseInt(formData.homeTeamId, 10),
       awayTeamId: parseInt(formData.awayTeamId, 10),
+      gameTypeId: parseInt(formData.gameTypeId, 10),
+      statusId: parseInt(formData.statusId, 10),
       locationId: formData.locationId ? parseInt(formData.locationId, 10) : null,
       date: formData.date || null,
       startTime: formData.startTime || null,
+      endTime: formData.endTime || null,
       homeScore: formData.homeScore ? parseInt(formData.homeScore, 10) : null,
       awayScore: formData.awayScore ? parseInt(formData.awayScore, 10) : null,
+      attendance: formData.attendance ? parseInt(formData.attendance, 10) : null,
+      weather: formData.weather || null,
       notes: formData.notes || null,
     };
 
@@ -201,9 +248,12 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       if (response.success && response.data) {
         setGames([...games, response.data]);
         setSelectedGame(response.data);
+        const newLeagueId = formData.leagueId;
+        setCachedLeagueId(newLeagueId);
+        populateFormData(response.data, newLeagueId);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to create game');
+        setError(formatApiError(response, 'Failed to create game'));
       }
     } else if (viewMode === 'edit' && selectedGame) {
       const response = await gamesApi.update(selectedGame.id, {
@@ -214,16 +264,19 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       if (response.success && response.data) {
         setGames(games.map(g => g.id === response.data!.id ? response.data! : g));
         setSelectedGame(response.data);
+        const newLeagueId = formData.leagueId;
+        setCachedLeagueId(newLeagueId);
+        populateFormData(response.data, newLeagueId);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to update game');
+        setError(formatApiError(response, 'Failed to update game'));
       }
     }
   }
 
   async function handleDelete() {
     if (!selectedGame) return;
-    
+
     if (!confirm('Delete this game?')) return;
 
     setIsLoading(true);
@@ -235,7 +288,7 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
       setSelectedGame(null);
       setViewMode('list');
     } else {
-      setError(response.error?.message || 'Failed to delete game');
+      setError(formatApiError(response, 'Failed to delete game'));
     }
   }
 
@@ -290,68 +343,15 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
     );
   }
 
-  function renderView() {
-    if (!selectedGame) return null;
-    return (
-      <>
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <DialogTitle>Game Details</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="text-center py-2">
-            <div className="text-lg font-medium">
-              {getTeamName(selectedGame.homeTeamId)} vs {getTeamName(selectedGame.awayTeamId)}
-            </div>
-            {selectedGame.homeScore !== null && selectedGame.awayScore !== null && (
-              <div className="text-2xl font-bold">
-                {selectedGame.homeScore} - {selectedGame.awayScore}
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">Date</Label>
-              <p>{formatDate(selectedGame.date)}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Time</Label>
-              <p>{formatTime(selectedGame.startTime) || '—'}</p>
-            </div>
-          </div>
-          <div>
-            <Label className="text-muted-foreground">Location</Label>
-            <p>{getLocationName(selectedGame.locationId)}</p>
-          </div>
-          {selectedGame.notes && (
-            <div>
-              <Label className="text-muted-foreground">Notes</Label>
-              <p>{selectedGame.notes}</p>
-            </div>
-          )}
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-          <Button variant="outline" onClick={handleEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
-
-  function renderForm() {
+  function renderDetail() {
+    const isReadOnly = viewMode === 'view';
     const isCreate = viewMode === 'create';
-    const isValid = formData.seasonId && formData.homeTeamId && formData.awayTeamId && formData.homeTeamId !== formData.awayTeamId;
-    
+    const title = isReadOnly ? 'Game Details' : isCreate ? 'New Game' : 'Edit Game';
+    const isValid = formData.seasonId && formData.homeTeamId && formData.awayTeamId
+      && formData.homeTeamId !== formData.awayTeamId
+      && formData.gameTypeId && formData.statusId && formData.date;
+    const selectClass = "w-full h-10 px-3 rounded-md border border-input bg-background text-sm disabled:cursor-not-allowed disabled:opacity-50";
+
     return (
       <>
         <DialogHeader>
@@ -359,18 +359,19 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <DialogTitle>{isCreate ? 'New Game' : 'Edit Game'}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="leagueId">League *</Label>
+              <Label htmlFor="leagueId">League{!isReadOnly && ' *'}</Label>
               <select
                 id="leagueId"
                 value={formData.leagueId}
                 onChange={(e) => setFormData({ ...formData, leagueId: e.target.value, seasonId: '' })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                className={selectClass}
+                disabled={isReadOnly}
               >
                 <option value="">Select league</option>
                 {leagues.map((league) => (
@@ -381,13 +382,13 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="seasonId">Season *</Label>
+              <Label htmlFor="seasonId">Season{!isReadOnly && ' *'}</Label>
               <select
                 id="seasonId"
                 value={formData.seasonId}
                 onChange={(e) => setFormData({ ...formData, seasonId: e.target.value })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                disabled={!formData.leagueId}
+                className={selectClass}
+                disabled={isReadOnly || !formData.leagueId}
               >
                 <option value="">Select season</option>
                 {seasons.map((season) => (
@@ -400,12 +401,13 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="homeTeamId">Home Team *</Label>
+              <Label htmlFor="homeTeamId">Home Team{!isReadOnly && ' *'}</Label>
               <select
                 id="homeTeamId"
                 value={formData.homeTeamId}
                 onChange={(e) => setFormData({ ...formData, homeTeamId: e.target.value })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                className={selectClass}
+                disabled={isReadOnly}
               >
                 <option value="">Select team</option>
                 {teams.map((team) => (
@@ -416,17 +418,54 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="awayTeamId">Away Team *</Label>
+              <Label htmlFor="awayTeamId">Away Team{!isReadOnly && ' *'}</Label>
               <select
                 id="awayTeamId"
                 value={formData.awayTeamId}
                 onChange={(e) => setFormData({ ...formData, awayTeamId: e.target.value })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                className={selectClass}
+                disabled={isReadOnly}
               >
                 <option value="">Select team</option>
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="gameTypeId">Game Type{!isReadOnly && ' *'}</Label>
+              <select
+                id="gameTypeId"
+                value={formData.gameTypeId}
+                onChange={(e) => setFormData({ ...formData, gameTypeId: e.target.value })}
+                className={selectClass}
+                disabled={isReadOnly}
+              >
+                <option value="">Select game type</option>
+                {gameTypes.map((gt) => (
+                  <option key={gt.id} value={gt.id}>
+                    {gt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="statusId">Game Status{!isReadOnly && ' *'}</Label>
+              <select
+                id="statusId"
+                value={formData.statusId}
+                onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
+                className={selectClass}
+                disabled={isReadOnly}
+              >
+                <option value="">Select status</option>
+                {gameStatuses.map((gs) => (
+                  <option key={gs.id} value={gs.id}>
+                    {gs.name}
                   </option>
                 ))}
               </select>
@@ -438,7 +477,8 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
               id="locationId"
               value={formData.locationId}
               onChange={(e) => setFormData({ ...formData, locationId: e.target.value })}
-              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              className={selectClass}
+              disabled={isReadOnly}
             >
               <option value="">No location</option>
               {locations.map((location) => (
@@ -448,14 +488,15 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="date">Date{!isReadOnly && ' *'}</Label>
               <Input
                 id="date"
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -465,6 +506,17 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
                 type="time"
                 value={formData.startTime}
                 onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                disabled={isReadOnly}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="endTime">End Time</Label>
+              <Input
+                id="endTime"
+                type="time"
+                value={formData.endTime}
+                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -477,6 +529,7 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
                 min="0"
                 value={formData.homeScore}
                 onChange={(e) => setFormData({ ...formData, homeScore: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -487,6 +540,30 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
                 min="0"
                 value={formData.awayScore}
                 onChange={(e) => setFormData({ ...formData, awayScore: e.target.value })}
+                disabled={isReadOnly}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="attendance">Attendance</Label>
+              <Input
+                id="attendance"
+                type="number"
+                min="0"
+                value={formData.attendance}
+                onChange={(e) => setFormData({ ...formData, attendance: e.target.value })}
+                disabled={isReadOnly}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="weather">Weather</Label>
+              <Input
+                id="weather"
+                value={formData.weather}
+                onChange={(e) => setFormData({ ...formData, weather: e.target.value })}
+                placeholder="e.g. Sunny, 72F"
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -497,27 +574,41 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               placeholder="Optional notes"
+              disabled={isReadOnly}
             />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleBack}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!isValid || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {isCreate ? 'Create' : 'Save'}
-          </Button>
-        </DialogFooter>
+        {isReadOnly ? (
+          <DialogFooter className="gap-2">
+            <Button variant="destructive" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button variant="outline" onClick={handleEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="outline" onClick={handleBack}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!isValid || isLoading}>
+              {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {isCreate ? 'Create' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
       </>
     );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         {error && (
-          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 whitespace-pre-line">
             {error}
           </div>
         )}
@@ -527,10 +618,8 @@ export function GameCrudModal({ open, onOpenChange, onClose, onBack }: GameCrudM
           </div>
         ) : viewMode === 'list' ? (
           renderList()
-        ) : viewMode === 'view' ? (
-          renderView()
         ) : (
-          renderForm()
+          renderDetail()
         )}
       </DialogContent>
     </Dialog>

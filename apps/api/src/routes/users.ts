@@ -4,7 +4,7 @@ import { user, userRole, person } from '../db/schema/index.js';
 import { eq, and, ilike, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/permissions.js';
-import { validate, CreateUserSchema, UpdateUserSchema, AddRoleSchema, LinkPersonSchema } from '../validation/index.js';
+import { validate, handleRouteError, CreateUserSchema, UpdateUserSchema, AddRoleSchema, LinkPersonSchema } from '../validation/index.js';
 import crypto from 'crypto';
 
 function hashPassword(password: string): string {
@@ -66,8 +66,7 @@ router.post('/', requireAdmin(), validate(CreateUserSchema), async (req: Request
       },
     });
   } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create user' } });
+    handleRouteError(res, error, 'Failed to create user');
   }
 });
 
@@ -116,8 +115,7 @@ router.get('/', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: usersWithRoles });
   } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch users' } });
+    handleRouteError(res, error, 'Failed to fetch users');
   }
 });
 
@@ -161,8 +159,7 @@ router.get('/:id', requireAdmin(), async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch user' } });
+    handleRouteError(res, error, 'Failed to fetch user');
   }
 });
 
@@ -195,8 +192,7 @@ router.patch('/:id', requireAdmin(), validate(UpdateUserSchema), async (req: Req
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update user' } });
+    handleRouteError(res, error, 'Failed to update user');
   }
 });
 
@@ -222,8 +218,7 @@ router.post('/:id/roles', requireAdmin(), validate(AddRoleSchema), async (req: R
     const [created] = await db.insert(userRole).values({ userId: id, role }).returning();
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error adding role:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to add role' } });
+    handleRouteError(res, error, 'Failed to add role');
   }
 });
 
@@ -249,8 +244,7 @@ router.delete('/:id/roles/:role', requireAdmin(), async (req: Request, res: Resp
 
     res.json({ success: true, data: { message: 'Role removed' } });
   } catch (error) {
-    console.error('Error removing role:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to remove role' } });
+    handleRouteError(res, error, 'Failed to remove role');
   }
 });
 
@@ -285,8 +279,7 @@ router.post('/:id/link-person', requireAdmin(), validate(LinkPersonSchema), asyn
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error linking person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to link person' } });
+    handleRouteError(res, error, 'Failed to link person');
   }
 });
 
@@ -313,8 +306,7 @@ router.delete('/:id/link-person', requireAdmin(), async (req: Request, res: Resp
 
     res.json({ success: true, data: { message: 'Person unlinked' } });
   } catch (error) {
-    console.error('Error unlinking person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to unlink person' } });
+    handleRouteError(res, error, 'Failed to unlink person');
   }
 });
 

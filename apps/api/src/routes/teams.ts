@@ -4,7 +4,7 @@ import { team, lockerRoom } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
-import { validate, CreateTeamSchema, UpdateTeamSchema } from '../validation/index.js';
+import { validate, CreateTeamSchema, UpdateTeamSchema, handleRouteError } from '../validation/index.js';
 import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 import { sandbox } from '../db/schema/sandbox.js';
 
@@ -49,8 +49,7 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
       .orderBy(team.name);
     res.json({ success: true, data: teams });
   } catch (error) {
-    console.error('Error fetching teams:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch teams' } });
+    handleRouteError(res, error, 'Failed to fetch teams');
   }
 });
 
@@ -80,8 +79,7 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching team:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch team' } });
+    handleRouteError(res, error, 'Failed to fetch team');
   }
 });
 
@@ -115,8 +113,7 @@ router.post('/', requireAdminOrTeamAdmin(), validate(CreateTeamSchema), async (r
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating team:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create team' } });
+    handleRouteError(res, error, 'Failed to create team');
   }
 });
 
@@ -153,8 +150,7 @@ router.patch('/:id', requireSandboxOwnerPermission(getTeamEntityContext), valida
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating team:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update team' } });
+    handleRouteError(res, error, 'Failed to update team');
   }
 });
 
@@ -176,8 +172,7 @@ router.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'Team deleted' } });
   } catch (error) {
-    console.error('Error deleting team:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete team' } });
+    handleRouteError(res, error, 'Failed to delete team');
   }
 });
 
@@ -197,8 +192,7 @@ router.get('/:teamId/locker-rooms', requireSandboxOwnerPermission(getTeamEntityC
     const rooms = await db.select().from(lockerRoom).where(eq(lockerRoom.teamId, teamId)).orderBy(lockerRoom.name);
     res.json({ success: true, data: rooms });
   } catch (error) {
-    console.error('Error fetching locker rooms:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch locker rooms' } });
+    handleRouteError(res, error, 'Failed to fetch locker rooms');
   }
 });
 
@@ -225,8 +219,7 @@ router.post('/:teamId/locker-rooms', requireSandboxOwnerPermission(getTeamEntity
     const [created] = await db.insert(lockerRoom).values({ teamId, seasonId, name, description, isPublic }).returning();
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating locker room:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create locker room' } });
+    handleRouteError(res, error, 'Failed to create locker room');
   }
 });
 

@@ -9,14 +9,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  teamsApi, 
-  leaguesApi, 
-  teamMembersApi, 
-  personsApi, 
+import {
+  teamsApi,
+  leaguesApi,
+  teamMembersApi,
+  personsApi,
   lookupsApi,
-  type Team, 
-  type League, 
+  formatApiError,
+  type Team,
+  type League,
   type Season,
   type TeamMember,
   type Person,
@@ -39,7 +40,6 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
   const [leagues, setLeagues] = useState<League[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [activeSeasonName, setActiveSeasonName] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -86,7 +86,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
     if (response.success && response.data) {
       setTeams(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load teams');
+      setError(formatApiError(response, 'Failed to load teams'));
     }
   }
 
@@ -112,24 +112,25 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
     }
   }
 
+  function populateFormData(team: Team) {
+    setFormData({
+      name: team.name,
+      shortName: team.shortName || '',
+      leagueId: team.leagueId?.toString() || '',
+      activeSeasonId: team.activeSeasonId?.toString() || '',
+      primaryColor: team.primaryColor || '',
+      secondaryColor: team.secondaryColor || '',
+    });
+  }
+
   async function handleSelectTeam(team: Team) {
     setSelectedTeam(team);
+    populateFormData(team);
     setViewMode('view');
-    // Load seasons for this team's league and get active season name
     if (team.leagueId) {
-      const response = await leaguesApi.listSeasons(team.leagueId);
-      if (response.success && response.data) {
-        setSeasons(response.data);
-        if (team.activeSeasonId) {
-          const activeSeason = response.data.find(s => s.id === team.activeSeasonId);
-          setActiveSeasonName(activeSeason?.name || null);
-        } else {
-          setActiveSeasonName(null);
-        }
-      }
+      await loadSeasonsForLeague(team.leagueId);
     } else {
       setSeasons([]);
-      setActiveSeasonName(null);
     }
   }
 
@@ -140,22 +141,8 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
     setViewMode('create');
   }
 
-  async function handleEdit() {
-    if (selectedTeam) {
-      // Load seasons if we have a league
-      if (selectedTeam.leagueId) {
-        await loadSeasonsForLeague(selectedTeam.leagueId);
-      }
-      setFormData({
-        name: selectedTeam.name,
-        shortName: selectedTeam.shortName || '',
-        leagueId: selectedTeam.leagueId?.toString() || '',
-        activeSeasonId: selectedTeam.activeSeasonId?.toString() || '',
-        primaryColor: selectedTeam.primaryColor || '',
-        secondaryColor: selectedTeam.secondaryColor || '',
-      });
-      setViewMode('edit');
-    }
+  function handleEdit() {
+    setViewMode('edit');
   }
 
   function handleBack() {
@@ -163,6 +150,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
       setViewMode('list');
       setSelectedTeam(null);
     } else if (viewMode === 'edit') {
+      if (selectedTeam) populateFormData(selectedTeam);
       setViewMode('view');
     } else if (viewMode === 'roster') {
       setViewMode('view');
@@ -192,7 +180,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
     if (response.success && response.data) {
       setMembers(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load roster');
+      setError(formatApiError(response, 'Failed to load roster'));
     }
   }
 
@@ -255,7 +243,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
         await loadMembers(selectedTeam.id);
         setViewMode('roster');
       } else {
-        setError(response.error?.message || 'Failed to add member');
+        setError(formatApiError(response, 'Failed to add member'));
       }
     } else if (viewMode === 'editMember' && selectedMember) {
       const response = await teamMembersApi.update(selectedTeam.id, selectedMember.id, {
@@ -272,7 +260,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
         setViewMode('roster');
         setSelectedMember(null);
       } else {
-        setError(response.error?.message || 'Failed to update member');
+        setError(formatApiError(response, 'Failed to update member'));
       }
     }
   }
@@ -287,7 +275,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
     if (response.success) {
       setMembers(members.filter(m => m.id !== member.id));
     } else {
-      setError(response.error?.message || 'Failed to remove member');
+      setError(formatApiError(response, 'Failed to remove member'));
     }
   }
 
@@ -315,9 +303,10 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
       if (response.success && response.data) {
         setTeams([...teams, response.data]);
         setSelectedTeam(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to create team');
+        setError(formatApiError(response, 'Failed to create team'));
       }
     } else if (viewMode === 'edit' && selectedTeam) {
       const response = await teamsApi.update(selectedTeam.id, {
@@ -328,23 +317,17 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
       if (response.success && response.data) {
         setTeams(teams.map(t => t.id === response.data!.id ? response.data! : t));
         setSelectedTeam(response.data);
-        // Update active season name from the already-loaded seasons
-        if (response.data.activeSeasonId) {
-          const activeSeason = seasons.find(s => s.id === response.data!.activeSeasonId);
-          setActiveSeasonName(activeSeason?.name || null);
-        } else {
-          setActiveSeasonName(null);
-        }
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to update team');
+        setError(formatApiError(response, 'Failed to update team'));
       }
     }
   }
 
   async function handleDelete() {
     if (!selectedTeam) return;
-    
+
     if (!confirm(`Delete "${selectedTeam.name}"?`)) return;
 
     setIsLoading(true);
@@ -356,21 +339,8 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
       setSelectedTeam(null);
       setViewMode('list');
     } else {
-      setError(response.error?.message || 'Failed to delete team');
+      setError(formatApiError(response, 'Failed to delete team'));
     }
-  }
-
-  function renderColorSwatch(color: string | null) {
-    if (!color) return '—';
-    return (
-      <div className="flex items-center gap-2">
-        <div 
-          className="w-6 h-6 rounded border" 
-          style={{ backgroundColor: color }}
-        />
-        <span>{color}</span>
-      </div>
-    );
   }
 
   function renderList() {
@@ -378,6 +348,9 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
       <>
         <DialogHeader>
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
             <DialogTitle>Teams</DialogTitle>
             <Button size="sm" onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-1" />
@@ -397,8 +370,8 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                   onClick={() => handleSelectTeam(team)}
                 >
                   {team.primaryColor && (
-                    <div 
-                      className="w-4 h-4 rounded-full border flex-shrink-0" 
+                    <div
+                      className="w-4 h-4 rounded-full border flex-shrink-0"
                       style={{ backgroundColor: team.primaryColor }}
                     />
                   )}
@@ -424,70 +397,13 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
     );
   }
 
-  function renderView() {
-    if (!selectedTeam) return null;
-    return (
-      <>
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <DialogTitle>{selectedTeam.name}</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">Name</Label>
-              <p className="text-lg">{selectedTeam.name}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Short Name</Label>
-              <p>{selectedTeam.shortName || '—'}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">League</Label>
-              <p>{getLeagueName(selectedTeam.leagueId) || '—'}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Active Season</Label>
-              <p>{activeSeasonName || (selectedTeam.activeSeasonId ? 'Loading...' : 'None set')}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">Primary Color</Label>
-              {renderColorSwatch(selectedTeam.primaryColor)}
-            </div>
-            <div>
-              <Label className="text-muted-foreground">Secondary Color</Label>
-              {renderColorSwatch(selectedTeam.secondaryColor)}
-            </div>
-          </div>
-        </div>
-        <DialogFooter className="gap-2 flex-wrap">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-          <Button variant="outline" onClick={handleOpenRoster}>
-            <Users className="h-4 w-4 mr-1" />
-            Roster
-          </Button>
-          <Button variant="outline" onClick={handleEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
-
-  function renderForm() {
+  function renderDetail() {
+    const isReadOnly = viewMode === 'view';
     const isCreate = viewMode === 'create';
+    const title = isReadOnly
+      ? (selectedTeam?.name || 'Team')
+      : isCreate ? 'New Team' : 'Edit Team';
+
     return (
       <>
         <DialogHeader>
@@ -495,18 +411,19 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <DialogTitle>{isCreate ? 'New Team' : 'Edit Team'}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
+              <Label htmlFor="name">Name{!isReadOnly && ' *'}</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Team name"
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -516,6 +433,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                 value={formData.shortName}
                 onChange={(e) => setFormData({ ...formData, shortName: e.target.value })}
                 placeholder="e.g., ATL"
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -534,7 +452,8 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                     setSeasons([]);
                   }
                 }}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isReadOnly}
               >
                 <option value="">No league</option>
                 {leagues.map((league) => (
@@ -550,8 +469,8 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                 id="activeSeasonId"
                 value={formData.activeSeasonId}
                 onChange={(e) => setFormData({ ...formData, activeSeasonId: e.target.value })}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                disabled={!formData.leagueId || seasons.length === 0}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isReadOnly || !formData.leagueId || seasons.length === 0}
               >
                 <option value="">No active season</option>
                 {seasons.map((season) => (
@@ -560,7 +479,7 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                   </option>
                 ))}
               </select>
-              {formData.leagueId && seasons.length === 0 && (
+              {!isReadOnly && formData.leagueId && seasons.length === 0 && (
                 <p className="text-xs text-muted-foreground">No seasons in this league yet</p>
               )}
             </div>
@@ -575,12 +494,14 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                   value={formData.primaryColor || '#000000'}
                   onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
                   className="w-12 h-10 p-1 cursor-pointer"
+                  disabled={isReadOnly}
                 />
                 <Input
                   value={formData.primaryColor}
                   onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
                   placeholder="#000000"
                   className="flex-1"
+                  disabled={isReadOnly}
                 />
               </div>
             </div>
@@ -593,26 +514,45 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
                   value={formData.secondaryColor || '#ffffff'}
                   onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value })}
                   className="w-12 h-10 p-1 cursor-pointer"
+                  disabled={isReadOnly}
                 />
                 <Input
                   value={formData.secondaryColor}
                   onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value })}
                   placeholder="#ffffff"
                   className="flex-1"
+                  disabled={isReadOnly}
                 />
               </div>
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleBack}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!formData.name || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {isCreate ? 'Create' : 'Save'}
-          </Button>
-        </DialogFooter>
+        {isReadOnly ? (
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="destructive" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button variant="outline" onClick={handleOpenRoster}>
+              <Users className="h-4 w-4 mr-1" />
+              Roster
+            </Button>
+            <Button variant="outline" onClick={handleEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="outline" onClick={handleBack}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!formData.name || isLoading}>
+              {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {isCreate ? 'Create' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
       </>
     );
   }
@@ -806,9 +746,9 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         {error && (
-          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 whitespace-pre-line">
             {error}
           </div>
         )}
@@ -818,14 +758,12 @@ export function TeamCrudModal({ open, onOpenChange, onClose, onBack }: TeamCrudM
           </div>
         ) : viewMode === 'list' ? (
           renderList()
-        ) : viewMode === 'view' ? (
-          renderView()
         ) : viewMode === 'roster' ? (
           renderRoster()
         ) : viewMode === 'addMember' || viewMode === 'editMember' ? (
           renderMemberForm()
         ) : (
-          renderForm()
+          renderDetail()
         )}
       </DialogContent>
     </Dialog>

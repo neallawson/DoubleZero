@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { leaguesApi, type Season, type League } from '@/lib/api';
+import { leaguesApi, formatApiError, type Season, type League } from '@/lib/api';
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Star } from 'lucide-react';
 
 interface SeasonCrudModalProps {
@@ -49,12 +49,21 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
     if (response.success && response.data) {
       setSeasons(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load seasons');
+      setError(formatApiError(response, 'Failed to load seasons'));
     }
+  }
+
+  function populateFormData(season: Season) {
+    setFormData({
+      name: season.name,
+      startDate: season.startDate?.split('T')[0] || '',
+      endDate: season.endDate?.split('T')[0] || '',
+    });
   }
 
   function handleSelectSeason(season: Season) {
     setSelectedSeason(season);
+    populateFormData(season);
     setViewMode('view');
   }
 
@@ -65,14 +74,7 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
   }
 
   function handleEdit() {
-    if (selectedSeason) {
-      setFormData({
-        name: selectedSeason.name,
-        startDate: selectedSeason.startDate?.split('T')[0] || '',
-        endDate: selectedSeason.endDate?.split('T')[0] || '',
-      });
-      setViewMode('edit');
-    }
+    setViewMode('edit');
   }
 
   function handleBack() {
@@ -80,6 +82,7 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
       setViewMode('list');
       setSelectedSeason(null);
     } else if (viewMode === 'edit') {
+      if (selectedSeason) populateFormData(selectedSeason);
       setViewMode('view');
     }
   }
@@ -100,9 +103,10 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
       if (response.success && response.data) {
         setSeasons([...seasons, response.data]);
         setSelectedSeason(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to create season');
+        setError(formatApiError(response, 'Failed to create season'));
       }
     } else if (viewMode === 'edit' && selectedSeason) {
       const response = await leaguesApi.updateSeason(league.id, selectedSeason.id, {
@@ -113,16 +117,17 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
       if (response.success && response.data) {
         setSeasons(seasons.map(s => s.id === response.data!.id ? response.data! : s));
         setSelectedSeason(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to update season');
+        setError(formatApiError(response, 'Failed to update season'));
       }
     }
   }
 
   async function handleDelete() {
     if (!selectedSeason) return;
-    
+
     if (!confirm(`Delete "${selectedSeason.name}"?`)) return;
 
     setIsLoading(true);
@@ -134,7 +139,7 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
       setSelectedSeason(null);
       setViewMode('list');
     } else {
-      setError(response.error?.message || 'Failed to delete season');
+      setError(formatApiError(response, 'Failed to delete season'));
     }
   }
 
@@ -151,7 +156,7 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
     if (response.success && response.data) {
       onLeagueUpdated(response.data);
     } else {
-      setError(response.error?.message || 'Failed to set active season');
+      setError(formatApiError(response, 'Failed to set active season'));
     }
   }
 
@@ -208,10 +213,14 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
     );
   }
 
-  function renderView() {
-    if (!selectedSeason) return null;
-    const isActiveSeason = league.activeSeasonId === selectedSeason.id;
-    
+  function renderDetail() {
+    const isReadOnly = viewMode === 'view';
+    const isCreate = viewMode === 'create';
+    const isActiveSeason = selectedSeason ? league.activeSeasonId === selectedSeason.id : false;
+    const title = isReadOnly
+      ? (selectedSeason?.name || 'Season')
+      : isCreate ? 'New Season' : 'Edit Season';
+
     return (
       <>
         <DialogHeader>
@@ -220,73 +229,22 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <DialogTitle className="flex items-center gap-2">
-              {selectedSeason.name}
-              {isActiveSeason && (
+              {title}
+              {isReadOnly && isActiveSeason && (
                 <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
               )}
             </DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label className="text-muted-foreground">Name</Label>
-            <p className="text-lg">{selectedSeason.name}</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground">Start Date</Label>
-              <p>{formatDate(selectedSeason.startDate)}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground">End Date</Label>
-              <p>{formatDate(selectedSeason.endDate)}</p>
-            </div>
-          </div>
-          <div>
-            <Label className="text-muted-foreground">Status</Label>
-            <p>{isActiveSeason ? 'Active Season' : 'Inactive'}</p>
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-          {!isActiveSeason && (
-            <Button variant="secondary" size="sm" onClick={handleSetActive}>
-              <Star className="h-4 w-4 mr-1" />
-              Set Active
-            </Button>
-          )}
-          <Button variant="outline" onClick={handleEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
-
-  function renderForm() {
-    const isCreate = viewMode === 'create';
-    return (
-      <>
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <DialogTitle>{isCreate ? 'New Season' : 'Edit Season'}</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
+            <Label htmlFor="name">Name{!isReadOnly && ' *'}</Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Spring 2026"
+              disabled={isReadOnly}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -297,6 +255,7 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
             <div className="space-y-2">
@@ -306,28 +265,54 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
                 type="date"
                 value={formData.endDate}
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                disabled={isReadOnly}
               />
             </div>
           </div>
+          {isReadOnly && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-muted-foreground">Status</Label>
+              <Input value={isActiveSeason ? 'Active Season' : 'Inactive'} disabled />
+            </div>
+          )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleBack}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!formData.name || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {isCreate ? 'Create' : 'Save'}
-          </Button>
-        </DialogFooter>
+        {isReadOnly ? (
+          <DialogFooter className="gap-2">
+            <Button variant="destructive" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            {!isActiveSeason && (
+              <Button variant="secondary" size="sm" onClick={handleSetActive}>
+                <Star className="h-4 w-4 mr-1" />
+                Set Active
+              </Button>
+            )}
+            <Button variant="outline" onClick={handleEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="outline" onClick={handleBack}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!formData.name || isLoading}>
+              {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {isCreate ? 'Create' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
       </>
     );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         {error && (
-          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 whitespace-pre-line">
             {error}
           </div>
         )}
@@ -337,10 +322,8 @@ export function SeasonCrudModal({ open, onOpenChange, league, onLeagueUpdated }:
           </div>
         ) : viewMode === 'list' ? (
           renderList()
-        ) : viewMode === 'view' ? (
-          renderView()
         ) : (
-          renderForm()
+          renderDetail()
         )}
       </DialogContent>
     </Dialog>

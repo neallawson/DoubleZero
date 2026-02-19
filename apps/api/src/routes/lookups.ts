@@ -4,7 +4,7 @@ import { teamRole, playerPosition, gameType, gameStatus, gameEventType } from '.
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/permissions.js';
-import { validate, CreateLookupSchema } from '../validation/index.js';
+import { validate, handleRouteError, CreateLookupSchema } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -25,11 +25,7 @@ router.get('/team-roles', async (_req: Request, res: Response) => {
 
     res.json({ success: true, data: roles });
   } catch (error) {
-    console.error('Error fetching team roles:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch team roles' },
-    });
+    handleRouteError(res, error, 'Failed to fetch team roles');
   }
 });
 
@@ -54,11 +50,7 @@ router.post('/team-roles', requireAdmin(), validate(CreateLookupSchema), async (
         error: { code: 'CONFLICT', message: 'Team role with this name already exists' },
       });
     }
-    console.error('Error creating team role:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create team role' },
-    });
+    handleRouteError(res, error, 'Failed to create team role');
   }
 });
 
@@ -76,11 +68,7 @@ router.get('/player-positions', async (_req: Request, res: Response) => {
 
     res.json({ success: true, data: positions });
   } catch (error) {
-    console.error('Error fetching player positions:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch player positions' },
-    });
+    handleRouteError(res, error, 'Failed to fetch player positions');
   }
 });
 
@@ -105,11 +93,7 @@ router.post('/player-positions', requireAdmin(), validate(CreateLookupSchema), a
         error: { code: 'CONFLICT', message: 'Player position with this name already exists' },
       });
     }
-    console.error('Error creating player position:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create player position' },
-    });
+    handleRouteError(res, error, 'Failed to create player position');
   }
 });
 
@@ -127,11 +111,7 @@ router.get('/game-types', async (_req: Request, res: Response) => {
 
     res.json({ success: true, data: types });
   } catch (error) {
-    console.error('Error fetching game types:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch game types' },
-    });
+    handleRouteError(res, error, 'Failed to fetch game types');
   }
 });
 
@@ -156,11 +136,7 @@ router.post('/game-types', requireAdmin(), validate(CreateLookupSchema), async (
         error: { code: 'CONFLICT', message: 'Game type with this name already exists' },
       });
     }
-    console.error('Error creating game type:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create game type' },
-    });
+    handleRouteError(res, error, 'Failed to create game type');
   }
 });
 
@@ -178,11 +154,7 @@ router.get('/game-statuses', async (_req: Request, res: Response) => {
 
     res.json({ success: true, data: statuses });
   } catch (error) {
-    console.error('Error fetching game statuses:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch game statuses' },
-    });
+    handleRouteError(res, error, 'Failed to fetch game statuses');
   }
 });
 
@@ -207,11 +179,7 @@ router.post('/game-statuses', requireAdmin(), validate(CreateLookupSchema), asyn
         error: { code: 'CONFLICT', message: 'Game status with this name already exists' },
       });
     }
-    console.error('Error creating game status:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create game status' },
-    });
+    handleRouteError(res, error, 'Failed to create game status');
   }
 });
 
@@ -229,11 +197,7 @@ router.get('/game-event-types', async (_req: Request, res: Response) => {
 
     res.json({ success: true, data: types });
   } catch (error) {
-    console.error('Error fetching game event types:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch game event types' },
-    });
+    handleRouteError(res, error, 'Failed to fetch game event types');
   }
 });
 
@@ -258,11 +222,7 @@ router.post('/game-event-types', requireAdmin(), validate(CreateLookupSchema), a
         error: { code: 'CONFLICT', message: 'Game event type with this name already exists' },
       });
     }
-    console.error('Error creating game event type:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create game event type' },
-    });
+    handleRouteError(res, error, 'Failed to create game event type');
   }
 });
 

@@ -1,47 +1,31 @@
 import { z } from 'zod';
-import { IdSchema, VersionSchema, TimestampSchema } from '../common';
+import { requiredString, optionalString, optionalPositiveInt, version } from '../common.js';
 
-// Location entity
-export const LocationSchema = z.object({
-  id: IdSchema,
-  lockerRoomId: IdSchema.nullable(), // Null = shared/public location
-  name: z.string().min(1).max(100),
-  address: z.string().max(200).nullable(),
-  city: z.string().max(100).nullable(),
-  state: z.string().max(50).nullable(),
-  zip: z.string().max(20).nullable(),
-  country: z.string().max(50).nullable(),
-  homeTeamId: IdSchema.nullable(),
-  isActive: z.boolean().default(true),
-  version: VersionSchema,
-  createdAt: TimestampSchema,
+export const CreateLocationSchema = z.object({
+  name: requiredString(100),
+  address: optionalString(255),
+  city: optionalString(100),
+  state: optionalString(50),
+  zip: optionalString(20),
+  country: optionalString(50),
+  homeTeamId: optionalPositiveInt,
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
 });
 
-export const LocationCreateSchema = z.object({
-  lockerRoomId: IdSchema.nullable().optional(),
-  name: z.string().min(1).max(100),
-  address: z.string().max(200).nullable().optional(),
-  city: z.string().max(100).nullable().optional(),
-  state: z.string().max(50).nullable().optional(),
-  zip: z.string().max(20).nullable().optional(),
-  country: z.string().max(50).nullable().optional(),
-  homeTeamId: IdSchema.nullable().optional(),
+export const UpdateLocationSchema = z.object({
+  name: optionalString(100),
+  address: optionalString(255),
+  city: optionalString(100),
+  state: optionalString(50),
+  zip: optionalString(20),
+  country: optionalString(50),
+  homeTeamId: optionalPositiveInt,
   isActive: z.boolean().optional(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  version: version,
 });
 
-export const LocationPatchSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  address: z.string().max(200).nullable().optional(),
-  city: z.string().max(100).nullable().optional(),
-  state: z.string().max(50).nullable().optional(),
-  zip: z.string().max(20).nullable().optional(),
-  country: z.string().max(50).nullable().optional(),
-  homeTeamId: IdSchema.nullable().optional(),
-  isActive: z.boolean().optional(),
-  version: z.number().int().nonnegative(),
-});
-
-// Types
-export type Location = z.infer<typeof LocationSchema>;
-export type LocationCreate = z.infer<typeof LocationCreateSchema>;
-export type LocationPatch = z.infer<typeof LocationPatchSchema>;
+export type CreateLocationInput = z.infer<typeof CreateLocationSchema>;
+export type UpdateLocationInput = z.infer<typeof UpdateLocationSchema>;

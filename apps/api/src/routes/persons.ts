@@ -4,7 +4,7 @@ import { person, teamMember, team } from '../db/schema/index.js';
 import { eq, and, ilike, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, getPersonForUser, isAdmin, getTeamMembership, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
-import { validate, CreatePersonSchema, UpdatePersonSchema } from '../validation/index.js';
+import { validate, CreatePersonSchema, UpdatePersonSchema, handleRouteError } from '../validation/index.js';
 import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
@@ -88,8 +88,7 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
     const persons = await db.select().from(person).where(whereClause).orderBy(person.displayName);
     res.json({ success: true, data: persons });
   } catch (error) {
-    console.error('Error fetching persons:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch persons' } });
+    handleRouteError(res, error, 'Failed to fetch persons');
   }
 });
 
@@ -111,8 +110,7 @@ router.get('/me', requireAuthenticated(), async (req: Request, res: Response) =>
     const [found] = await db.select().from(person).where(eq(person.id, personId)).limit(1);
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch person' } });
+    handleRouteError(res, error, 'Failed to fetch person');
   }
 });
 
@@ -142,8 +140,7 @@ router.get('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch person' } });
+    handleRouteError(res, error, 'Failed to fetch person');
   }
 });
 
@@ -256,8 +253,7 @@ router.post('/', requireAuthenticated(), validate(CreatePersonSchema), async (re
 
     res.status(201).json({ success: true, data: result });
   } catch (error) {
-    console.error('Error creating person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create person' } });
+    handleRouteError(res, error, 'Failed to create person');
   }
 });
 
@@ -301,8 +297,7 @@ router.patch('/me', requireAuthenticated(), async (req: Request, res: Response) 
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update person' } });
+    handleRouteError(res, error, 'Failed to update person');
   }
 });
 
@@ -339,8 +334,7 @@ router.patch('/:id', requireSandboxOwnerPermission(getPersonEntityContext), vali
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update person' } });
+    handleRouteError(res, error, 'Failed to update person');
   }
 });
 
@@ -362,8 +356,7 @@ router.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'Person deleted' } });
   } catch (error) {
-    console.error('Error deleting person:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete person' } });
+    handleRouteError(res, error, 'Failed to delete person');
   }
 });
 

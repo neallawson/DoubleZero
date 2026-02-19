@@ -9,9 +9,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { leaguesApi, type League } from '@/lib/api';
+import { leaguesApi, formatApiError, type League } from '@/lib/api';
 import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Calendar } from 'lucide-react';
-import { useState as useStateReact } from 'react';
 import { SeasonCrudModal } from './SeasonCrudModal';
 
 interface LeagueCrudModalProps {
@@ -23,15 +22,13 @@ interface LeagueCrudModalProps {
 
 type ViewMode = 'list' | 'view' | 'edit' | 'create';
 
-// Track if seasons modal is open
-
 export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueCrudModalProps) {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isSeasonsOpen, setIsSeasonsOpen] = useStateReact(false);
+  const [isSeasonsOpen, setIsSeasonsOpen] = useState(false);
   const [activeSeasonName, setActiveSeasonName] = useState<string | null>(null);
 
   // Form state
@@ -55,12 +52,21 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
     if (response.success && response.data) {
       setLeagues(response.data);
     } else {
-      setError(response.error?.message || 'Failed to load leagues');
+      setError(formatApiError(response, 'Failed to load leagues'));
     }
+  }
+
+  function populateFormData(league: League) {
+    setFormData({
+      name: league.name,
+      description: league.description || '',
+      governingBody: league.governingBody || '',
+    });
   }
 
   async function handleSelectLeague(league: League) {
     setSelectedLeague(league);
+    populateFormData(league);
     setViewMode('view');
     // Fetch active season name if there is one
     if (league.activeSeasonId) {
@@ -81,14 +87,7 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
   }
 
   function handleEdit() {
-    if (selectedLeague) {
-      setFormData({
-        name: selectedLeague.name,
-        description: selectedLeague.description || '',
-        governingBody: selectedLeague.governingBody || '',
-      });
-      setViewMode('edit');
-    }
+    setViewMode('edit');
   }
 
   function handleBack() {
@@ -96,6 +95,7 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
       setViewMode('list');
       setSelectedLeague(null);
     } else if (viewMode === 'edit') {
+      if (selectedLeague) populateFormData(selectedLeague);
       setViewMode('view');
     }
   }
@@ -110,9 +110,10 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
       if (response.success && response.data) {
         setLeagues([...leagues, response.data]);
         setSelectedLeague(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to create league');
+        setError(formatApiError(response, 'Failed to create league'));
       }
     } else if (viewMode === 'edit' && selectedLeague) {
       const response = await leaguesApi.update(selectedLeague.id, {
@@ -123,16 +124,17 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
       if (response.success && response.data) {
         setLeagues(leagues.map(l => l.id === response.data!.id ? response.data! : l));
         setSelectedLeague(response.data);
+        populateFormData(response.data);
         setViewMode('view');
       } else {
-        setError(response.error?.message || 'Failed to update league');
+        setError(formatApiError(response, 'Failed to update league'));
       }
     }
   }
 
   async function handleDelete() {
     if (!selectedLeague) return;
-    
+
     if (!confirm(`Delete "${selectedLeague.name}"?`)) return;
 
     setIsLoading(true);
@@ -144,7 +146,22 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
       setSelectedLeague(null);
       setViewMode('list');
     } else {
-      setError(response.error?.message || 'Failed to delete league');
+      setError(formatApiError(response, 'Failed to delete league'));
+    }
+  }
+
+  async function handleLeagueUpdated(updatedLeague: League) {
+    setLeagues(leagues.map(l => l.id === updatedLeague.id ? updatedLeague : l));
+    setSelectedLeague(updatedLeague);
+    // Refresh active season name
+    if (updatedLeague.activeSeasonId) {
+      const response = await leaguesApi.listSeasons(updatedLeague.id);
+      if (response.success && response.data) {
+        const activeSeason = response.data.find(s => s.id === updatedLeague.activeSeasonId);
+        setActiveSeasonName(activeSeason?.name || null);
+      }
+    } else {
+      setActiveSeasonName(null);
     }
   }
 
@@ -194,23 +211,13 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
     );
   }
 
-  async function handleLeagueUpdated(updatedLeague: League) {
-    setLeagues(leagues.map(l => l.id === updatedLeague.id ? updatedLeague : l));
-    setSelectedLeague(updatedLeague);
-    // Refresh active season name
-    if (updatedLeague.activeSeasonId) {
-      const response = await leaguesApi.listSeasons(updatedLeague.id);
-      if (response.success && response.data) {
-        const activeSeason = response.data.find(s => s.id === updatedLeague.activeSeasonId);
-        setActiveSeasonName(activeSeason?.name || null);
-      }
-    } else {
-      setActiveSeasonName(null);
-    }
-  }
+  function renderDetail() {
+    const isReadOnly = viewMode === 'view';
+    const isCreate = viewMode === 'create';
+    const title = isReadOnly
+      ? (selectedLeague?.name || 'League')
+      : isCreate ? 'New League' : 'Edit League';
 
-  function renderView() {
-    if (!selectedLeague) return null;
     return (
       <>
         <DialogHeader>
@@ -218,42 +225,77 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
             <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <DialogTitle>{selectedLeague.name}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
           </div>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label className="text-muted-foreground">Name</Label>
-            <p className="text-lg">{selectedLeague.name}</p>
+          <div className="space-y-2">
+            <Label htmlFor="name">Name{!isReadOnly && ' *'}</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="League name"
+              disabled={isReadOnly}
+            />
           </div>
-          <div>
-            <Label className="text-muted-foreground">Description</Label>
-            <p>{selectedLeague.description || '—'}</p>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Input
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Optional description"
+              disabled={isReadOnly}
+            />
           </div>
-          <div>
-            <Label className="text-muted-foreground">Governing Body</Label>
-            <p>{selectedLeague.governingBody || '—'}</p>
+          <div className="space-y-2">
+            <Label htmlFor="governingBody">Governing Body</Label>
+            <Input
+              id="governingBody"
+              value={formData.governingBody}
+              onChange={(e) => setFormData({ ...formData, governingBody: e.target.value })}
+              placeholder="e.g., FIFA, USSF"
+              disabled={isReadOnly}
+            />
           </div>
-          <div>
-            <Label className="text-muted-foreground">Active Season</Label>
-            <p>{activeSeasonName || (selectedLeague.activeSeasonId ? 'Loading...' : 'None')}</p>
-          </div>
+          {isReadOnly && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-muted-foreground">Active Season</Label>
+              <Input
+                value={activeSeasonName || (selectedLeague?.activeSeasonId ? 'Loading...' : 'None')}
+                disabled
+              />
+            </div>
+          )}
         </div>
-        <DialogFooter className="gap-2 flex-wrap">
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setIsSeasonsOpen(true)}>
-            <Calendar className="h-4 w-4 mr-1" />
-            Seasons
-          </Button>
-          <Button variant="outline" onClick={handleEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-        </DialogFooter>
-        {selectedLeague && (
+        {isReadOnly ? (
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="destructive" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setIsSeasonsOpen(true)}>
+              <Calendar className="h-4 w-4 mr-1" />
+              Seasons
+            </Button>
+            <Button variant="outline" onClick={handleEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="outline" onClick={handleBack}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!formData.name || isLoading}>
+              {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {isCreate ? 'Create' : 'Save'}
+            </Button>
+          </DialogFooter>
+        )}
+        {isReadOnly && selectedLeague && (
           <SeasonCrudModal
             open={isSeasonsOpen}
             onOpenChange={setIsSeasonsOpen}
@@ -265,65 +307,11 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
     );
   }
 
-  function renderForm() {
-    const isCreate = viewMode === 'create';
-    return (
-      <>
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <DialogTitle>{isCreate ? 'New League' : 'Edit League'}</DialogTitle>
-          </div>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="League name"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Input
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Optional description"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="governingBody">Governing Body</Label>
-            <Input
-              id="governingBody"
-              value={formData.governingBody}
-              onChange={(e) => setFormData({ ...formData, governingBody: e.target.value })}
-              placeholder="e.g., FIFA, USSF"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleBack}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!formData.name || isLoading}>
-            {isLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {isCreate ? 'Create' : 'Save'}
-          </Button>
-        </DialogFooter>
-      </>
-    );
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         {error && (
-          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4">
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md mb-4 whitespace-pre-line">
             {error}
           </div>
         )}
@@ -333,10 +321,8 @@ export function LeagueCrudModal({ open, onOpenChange, onClose, onBack }: LeagueC
           </div>
         ) : viewMode === 'list' ? (
           renderList()
-        ) : viewMode === 'view' ? (
-          renderView()
         ) : (
-          renderForm()
+          renderDetail()
         )}
       </DialogContent>
     </Dialog>

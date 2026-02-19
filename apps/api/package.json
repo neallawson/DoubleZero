@@ -16,6 +16,7 @@
     "db:reset": "tsx src/db/reset.ts"
   },
   "dependencies": {
+    "@doublezero/schema": "workspace:*",
     "better-auth": "^1.4.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",

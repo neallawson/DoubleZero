@@ -4,7 +4,7 @@ import { league, season } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
-import { validate, CreateLeagueSchema, UpdateLeagueSchema, CreateSeasonSchema, UpdateSeasonSchema } from '../validation/index.js';
+import { validate, CreateLeagueSchema, UpdateLeagueSchema, CreateSeasonSchema, UpdateSeasonSchema, handleRouteError } from '../validation/index.js';
 import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
@@ -50,11 +50,7 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: leagues });
   } catch (error) {
-    console.error('Error fetching leagues:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch leagues' },
-    });
+    handleRouteError(res, error, 'Failed to fetch leagues');
   }
 });
 
@@ -91,11 +87,7 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching league:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch league' },
-    });
+    handleRouteError(res, error, 'Failed to fetch league');
   }
 });
 
@@ -127,11 +119,7 @@ router.post('/', requireAdminOrTeamAdmin(), validate(CreateLeagueSchema), async 
         error: { code: 'CONFLICT', message: 'League with this name already exists' },
       });
     }
-    console.error('Error creating league:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create league' },
-    });
+    handleRouteError(res, error, 'Failed to create league');
   }
 });
 
@@ -173,11 +161,7 @@ router.patch('/:id', requireSandboxOwnerPermission(getLeagueEntityContext), vali
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating league:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to update league' },
-    });
+    handleRouteError(res, error, 'Failed to update league');
   }
 });
 
@@ -210,11 +194,7 @@ router.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'League deleted' } });
   } catch (error) {
-    console.error('Error deleting league:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to delete league' },
-    });
+    handleRouteError(res, error, 'Failed to delete league');
   }
 });
 
@@ -242,11 +222,7 @@ router.get('/:leagueId/seasons', requireAuthenticated(), async (req: Request, re
 
     res.json({ success: true, data: seasons });
   } catch (error) {
-    console.error('Error fetching seasons:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch seasons' },
-    });
+    handleRouteError(res, error, 'Failed to fetch seasons');
   }
 });
 
@@ -280,11 +256,7 @@ router.get('/:leagueId/seasons/:id', requireAuthenticated(), async (req: Request
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching season:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch season' },
-    });
+    handleRouteError(res, error, 'Failed to fetch season');
   }
 });
 
@@ -325,11 +297,7 @@ router.post('/:leagueId/seasons', requireAdmin(), validate(CreateSeasonSchema), 
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating season:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to create season' },
-    });
+    handleRouteError(res, error, 'Failed to create season');
   }
 });
 
@@ -371,11 +339,7 @@ router.patch('/:leagueId/seasons/:id', requireAdmin(), validate(UpdateSeasonSche
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating season:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to update season' },
-    });
+    handleRouteError(res, error, 'Failed to update season');
   }
 });
 
@@ -409,11 +373,7 @@ router.delete('/:leagueId/seasons/:id', requireAdmin(), async (req: Request, res
 
     res.json({ success: true, data: { message: 'Season deleted' } });
   } catch (error) {
-    console.error('Error deleting season:', error);
-    res.status(500).json({
-      success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to delete season' },
-    });
+    handleRouteError(res, error, 'Failed to delete season');
   }
 });
 

@@ -4,7 +4,7 @@ import { game, gameParticipant, gameOfficial, gameEvent } from '../db/schema/ind
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireAdmin, requireAuthenticated, requireAdminOrTeamAdmin, requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
-import { validate, CreateGameSchema, UpdateGameSchema } from '../validation/index.js';
+import { validate, CreateGameSchema, UpdateGameSchema, handleRouteError } from '../validation/index.js';
 import { sandboxFilter, getActiveSandboxId, getOrCreateTeamSandbox } from '../middleware/sandbox.js';
 
 const router: RouterType = Router();
@@ -53,8 +53,7 @@ router.get('/', requireAuthenticated(), async (req: Request, res: Response) => {
     const games = await db.select().from(game).where(whereClause).orderBy(game.date);
     res.json({ success: true, data: games });
   } catch (error) {
-    console.error('Error fetching games:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch games' } });
+    handleRouteError(res, error, 'Failed to fetch games');
   }
 });
 
@@ -84,8 +83,7 @@ router.get('/:id', requireAuthenticated(), async (req: Request, res: Response) =
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching game:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch game' } });
+    handleRouteError(res, error, 'Failed to fetch game');
   }
 });
 
@@ -110,8 +108,7 @@ router.post('/', requireAdminOrTeamAdmin(), validate(CreateGameSchema), async (r
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating game:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create game' } });
+    handleRouteError(res, error, 'Failed to create game');
   }
 });
 
@@ -153,8 +150,7 @@ router.patch('/:id', requireSandboxOwnerPermission(getGameEntityContext), valida
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating game:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update game' } });
+    handleRouteError(res, error, 'Failed to update game');
   }
 });
 
@@ -176,8 +172,7 @@ router.delete('/:id', requireAdmin(), async (req: Request, res: Response) => {
 
     res.json({ success: true, data: { message: 'Game deleted' } });
   } catch (error) {
-    console.error('Error deleting game:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete game' } });
+    handleRouteError(res, error, 'Failed to delete game');
   }
 });
 
@@ -197,8 +192,7 @@ router.get('/:gameId/participants', requireAuthenticated(), async (req: Request,
     const participants = await db.select().from(gameParticipant).where(eq(gameParticipant.gameId, gameId));
     res.json({ success: true, data: participants });
   } catch (error) {
-    console.error('Error fetching participants:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch participants' } });
+    handleRouteError(res, error, 'Failed to fetch participants');
   }
 });
 
@@ -225,8 +219,7 @@ router.post('/:gameId/participants', requireSandboxOwnerPermission(getGameEntity
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating participant:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create participant' } });
+    handleRouteError(res, error, 'Failed to create participant');
   }
 });
 
@@ -246,8 +239,7 @@ router.get('/:gameId/officials', requireAuthenticated(), async (req: Request, re
     const officials = await db.select().from(gameOfficial).where(eq(gameOfficial.gameId, gameId));
     res.json({ success: true, data: officials });
   } catch (error) {
-    console.error('Error fetching officials:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch officials' } });
+    handleRouteError(res, error, 'Failed to fetch officials');
   }
 });
 
@@ -271,8 +263,7 @@ router.post('/:gameId/officials', requireAdmin(), async (req: Request, res: Resp
     const [created] = await db.insert(gameOfficial).values({ gameId, personId, role }).returning();
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating official:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create official' } });
+    handleRouteError(res, error, 'Failed to create official');
   }
 });
 
@@ -299,8 +290,7 @@ router.get('/:gameId/events', requireAuthenticated(), async (req: Request, res: 
 
     res.json({ success: true, data: events });
   } catch (error) {
-    console.error('Error fetching events:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch events' } });
+    handleRouteError(res, error, 'Failed to fetch events');
   }
 });
 
@@ -322,8 +312,7 @@ router.post('/:gameId/events', requireSandboxOwnerPermission(getGameEntityContex
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating event:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create event' } });
+    handleRouteError(res, error, 'Failed to create event');
   }
 });
 

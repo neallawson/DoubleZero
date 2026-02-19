@@ -1,3 +1,10 @@
+import type {
+  CreatePlayInput,
+  UpdatePlayInput,
+  CreateUserInput,
+  UpdateUserInput,
+} from '@doublezero/schema';
+
 const API_BASE = '/api';
 
 interface ApiResponse<T> {
@@ -6,6 +13,7 @@ interface ApiResponse<T> {
   error?: {
     code: string;
     message: string;
+    details?: Array<{ field: string; message: string }>;
   };
 }
 
@@ -84,6 +92,19 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+
+/**
+ * Formats an API error response into a user-friendly message.
+ * If field-level details are available, lists them as bullet points.
+ */
+export function formatApiError(response: ApiResponse<unknown>, fallback: string): string {
+  if (!response.error) return fallback;
+  const { message, details } = response.error;
+  if (details && details.length > 0) {
+    return details.map(d => d.message).join('\n');
+  }
+  return message || fallback;
+}
 
 // Auth API
 export interface TeamMembership {
@@ -278,8 +299,8 @@ export interface AdminUser {
 export const usersApi = {
   list: () => api.get<AdminUser[]>('/v1/users'),
   get: (id: number) => api.get<AdminUser>(`/v1/users/${id}`),
-  create: (data: { email: string; password: string }) => api.post<AdminUser>('/v1/users', data),
-  update: (id: number, data: { isActive?: boolean; isVerified?: boolean; version: number }) => 
+  create: (data: CreateUserInput) => api.post<AdminUser>('/v1/users', data),
+  update: (id: number, data: UpdateUserInput) =>
     api.patch<AdminUser>(`/v1/users/${id}`, data),
   addRole: (id: number, role: 'ADMIN' | 'USER') => api.post(`/v1/users/${id}/roles`, { role }),
   removeRole: (id: number, role: 'ADMIN' | 'USER') => api.delete(`/v1/users/${id}/roles/${role}`),
@@ -355,9 +376,22 @@ export interface PlayerPosition {
   category: string | null;
 }
 
+export interface GameType {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
+export interface GameStatus {
+  id: number;
+  name: string;
+}
+
 export const lookupsApi = {
   teamRoles: () => api.get<TeamRole[]>('/v1/lookups/team-roles'),
   playerPositions: () => api.get<PlayerPosition[]>('/v1/lookups/player-positions'),
+  gameTypes: () => api.get<GameType[]>('/v1/lookups/game-types'),
+  gameStatuses: () => api.get<GameStatus[]>('/v1/lookups/game-statuses'),
 };
 
 // Plays API (Playboard Composer)
@@ -427,23 +461,8 @@ export const playsApi = {
     return api.get<Play[]>(`/v1/plays${query ? `?${query}` : ''}`);
   },
   get: (id: number) => api.get<Play>(`/v1/plays/${id}`),
-  create: (data: {
-    name: string;
-    description?: string;
-    tags?: string[];
-    teamId?: number;
-    fieldTemplateId?: number;
-    clientId?: string;
-  }) => api.post<Play>('/v1/plays', data),
-  update: (id: number, data: {
-    name?: string;
-    description?: string;
-    tags?: string[];
-    viewportZoom?: number;
-    viewportPanX?: number;
-    viewportPanY?: number;
-    version: number;
-  }) => api.patch<Play>(`/v1/plays/${id}`, data),
+  create: (data: CreatePlayInput) => api.post<Play>('/v1/plays', data),
+  update: (id: number, data: UpdatePlayInput) => api.patch<Play>(`/v1/plays/${id}`, data),
   delete: (id: number) => api.delete(`/v1/plays/${id}`),
 
   // Bulk operations for players and annotations

@@ -4,7 +4,7 @@ import { teamMember, team, person, teamRole, playerPosition } from '../db/schema
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireSandboxOwnerPermission, type SandboxEntityContext } from '../middleware/permissions.js';
-import { validate, CreateTeamMemberSchema, UpdateTeamMemberSchema } from '../validation/index.js';
+import { validate, CreateTeamMemberSchema, UpdateTeamMemberSchema, handleRouteError } from '../validation/index.js';
 
 const router: RouterType = Router();
 
@@ -90,8 +90,7 @@ router.get('/:teamId/members', requireSandboxOwnerPermission(getTeamEntityContex
 
     res.json({ success: true, data: members });
   } catch (error) {
-    console.error('Error fetching team members:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch team members' } });
+    handleRouteError(res, error, 'Failed to fetch team members');
   }
 });
 
@@ -119,8 +118,7 @@ router.get('/:teamId/members/:id', requireSandboxOwnerPermission(getTeamEntityCo
 
     res.json({ success: true, data: found });
   } catch (error) {
-    console.error('Error fetching team member:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch team member' } });
+    handleRouteError(res, error, 'Failed to fetch team member');
   }
 });
 
@@ -166,8 +164,7 @@ router.post('/:teamId/members', requireSandboxOwnerPermission(getTeamEntityConte
 
     res.status(201).json({ success: true, data: created });
   } catch (error) {
-    console.error('Error creating team member:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to create team member' } });
+    handleRouteError(res, error, 'Failed to create team member');
   }
 });
 
@@ -215,8 +212,7 @@ router.patch('/:teamId/members/:id', requireSandboxOwnerPermission(getTeamEntity
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating team member:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to update team member' } });
+    handleRouteError(res, error, 'Failed to update team member');
   }
 });
 
@@ -244,8 +240,7 @@ router.delete('/:teamId/members/:id', requireSandboxOwnerPermission(getTeamEntit
 
     res.json({ success: true, data: { message: 'Team member removed' } });
   } catch (error) {
-    console.error('Error deleting team member:', error);
-    res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Failed to delete team member' } });
+    handleRouteError(res, error, 'Failed to delete team member');
   }
 });
 
